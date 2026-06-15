@@ -1,0 +1,71 @@
+{
+    "name": "设置",
+    "bundle_id": "com.apple.Preferences",
+    "description": "iOS 系统设置 App，用于管理设备各项配置。",
+    "pages": {
+        "首页": {
+            "keywords": ["设置", "首页", "主列表"],
+            "description": "设置首页，包含 Apple ID 入口和各功能模块入口",
+            "elements": [
+                {"label": "Apple ID、iCloud、媒体与购买项目", "strategy": "name", "value": "Apple ID、iCloud、媒体与购买项目", "description": "Apple ID 管理入口"},
+                {"label": "无线局域网", "strategy": "name", "value": "无线局域网", "description": "WiFi 设置入口"},
+                {"label": "蓝牙", "strategy": "name", "value": "蓝牙", "description": "蓝牙设置入口"},
+                {"label": "蜂窝网络", "strategy": "name", "value": "蜂窝网络", "description": "蜂窝数据设置"},
+                {"label": "通知", "strategy": "name", "value": "通知", "description": "通知管理"},
+                {"label": "通用", "strategy": "name", "value": "通用", "description": "通用设置入口"},
+                {"label": "显示与亮度", "strategy": "name", "value": "显示与亮度", "description": "屏幕显示设置"}
+            ]
+        },
+        "WiFi 设置": {
+            "keywords": ["WiFi", "无线局域网", "无线网络", "Wi-Fi"],
+            "description": "无线局域网设置页面，可开关 WiFi 和选择网络",
+            "elements": [
+                {"label": "无线局域网", "strategy": "name", "value": "无线局域网", "description": "WiFi 主开关"},
+                {"label": "其他网络", "strategy": "name", "value": "其他网络", "description": "其他网络列表区域"},
+                {"label": "请求加入网络", "strategy": "name", "value": "请求加入网络", "description": "自动加入网络开关"}
+            ]
+        },
+        "通用设置": {
+            "keywords": ["通用", "关于本机", "软件更新", "存储空间"],
+            "description": "通用设置页面，包含软件更新、存储空间等子项",
+            "elements": [
+                {"label": "关于本机", "strategy": "name", "value": "关于本机", "description": "设备信息"},
+                {"label": "软件更新", "strategy": "name", "value": "软件更新", "description": "iOS 更新入口"},
+                {"label": "iPhone 储存空间", "strategy": "name", "value": "iPhone 储存空间", "description": "存储空间管理"},
+                {"label": "语言与地区", "strategy": "name", "value": "语言与地区", "description": "语言和地区设置"}
+            ]
+        }
+    },
+    "flows": {
+        "关闭WiFi": [
+            "点击首页的 '无线局域网' 进入 WiFi 设置页",
+            "找到 WiFi 主开关（第一个 Switch）",
+            "如果开关状态为开启，点击关闭",
+            "确认 WiFi 已关闭（开关变为灰色）"
+        ],
+        "开启WiFi并连接网络": [
+            "点击首页的 '无线局域网' 进入 WiFi 设置页",
+            "如果 WiFi 主开关为关闭状态，先点击开启",
+            "等待网络列表加载（等待 2-3 秒）",
+            "在 '其他网络' 或 '我的网络' 列表中找到目标网络名称",
+            "点击目标网络名称",
+            "如果出现密码输入框，输入密码",
+            "点击右上角的 '加入' 按钮"
+        ],
+        "查看设备信息": [
+            "点击首页的 '通用' 进入通用设置",
+            "点击 '关于本机' 查看设备信息",
+            "可查看：名称、iOS 版本、型号、序列号等"
+        ],
+        "调整屏幕亮度": [
+            "点击首页的 '显示与亮度' 进入显示设置",
+            "拖动亮度滑块调整到目标位置"
+        ]
+    },
+    "tips": [
+        "设置首页是 UITableView 结构，可通过 name 策略定位各功能入口",
+        "WiFi 开关是 XCUIElementTypeSwitch 类型",
+        "部分子页面需要向上滑动才能看到所有选项，可多次上滑",
+        "如果弹出 '加入网络' 确认对话框，需要先 accept_alert"
+    ]
+}
