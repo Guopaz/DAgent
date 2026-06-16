@@ -55,15 +55,8 @@ class iOSAgent:
         max_steps: int = 30,
     ):
         self.wda = WDAClient(wda_url)
-        self.executor = ToolExecutor(self.wda)
-        self.llm = OpenAI(
-            api_key=llm_api_key or os.getenv("LLM_API_KEY"),
-            base_url=llm_base_url or os.getenv("LLM_BASE_URL"),
-        )
-        self.model = llm_model or os.getenv("LLM_MODEL_ID", "gpt-4o")
-        self.max_steps = max_steps
-        self.messages: list[dict[str, Any]] = []
         self.knowledge = AppKnowledge(knowledge_dir="knowledge")
+        self.executor = ToolExecutor(self.wda, knowledge=self.knowledge)
 
     def _build_knowledge_context(self, task: str, page_source: str = "") -> str:
         """根据任务和当前页面，从知识库构建相关上下文"""
