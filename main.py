@@ -1,4 +1,4 @@
-"""iOS 自动化 Agent 交互式入口"""
+"""iOS 自动化 Agent 交互式入口 — 基于 HelloAgents 框架。"""
 
 import sys
 from agent import iOSAgent
@@ -8,19 +8,16 @@ load_dotenv('.env')
 
 def main():
     print("=" * 60)
-    print("       iOS 自动化测试 Agent")
+    print("       iOS 自动化测试 Agent (HelloAgents)")
     print("=" * 60)
     print()
 
-    # WDA 地址配置
     wda_url = "http://localhost:8100"
     if len(sys.argv) > 1:
         wda_url = sys.argv[1]
 
-    # 初始化 Agent
     agent = iOSAgent(wda_url)
 
-    # 连接 WDA
     try:
         agent.connect()
     except Exception as e:

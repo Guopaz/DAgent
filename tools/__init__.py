@@ -1,13 +1,17 @@
-"""Tools package — register all tool modules and re-export public API."""
-from tools.executor import ToolExecutor, get_tools, register_tool_module
-from tools import perception, element, gesture, app, device, system, knowledge_tools
+"""Tools package — build HelloAgents ToolRegistry from WDA tool modules."""
+from hello_agents.tools import ToolRegistry
+from tools.adapter import build_wda_tools
+from tools import perception, element, gesture, app, device, system
 
-register_tool_module(perception)
-register_tool_module(element)
-register_tool_module(gesture)
-register_tool_module(app)
-register_tool_module(device)
-register_tool_module(system)
-register_tool_module(knowledge_tools)
+ALL_TOOL_MODULES = [perception, element, gesture, app, device, system]
 
-__all__ = ["ToolExecutor", "get_tools"]
+
+def build_tool_registry(wda) -> ToolRegistry:
+    """Build a HelloAgents ToolRegistry with all WDA tools registered."""
+    registry = ToolRegistry()
+    for tool in build_wda_tools(wda, tool_modules=ALL_TOOL_MODULES):
+        registry.register_tool(tool, auto_expand=False)
+    return registry
+
+
+__all__ = ["build_tool_registry", "ToolRegistry"]
