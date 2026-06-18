@@ -34,7 +34,7 @@ class Config(BaseModel):
 
     # 工具输出截断配置
     tool_output_max_lines: int = 2000  # 工具输出最大行数
-    tool_output_max_bytes: int = 51200  # 工具输出最大字节数（50KB）
+    tool_output_max_bytes: int = 1200  # 工具输出最大字节数（50KB）
     tool_output_dir: str = "tool-output"  # 完整输出保存目录
     tool_output_truncate_direction: str = "head"  # 截断方向：head/tail/head_tail
 

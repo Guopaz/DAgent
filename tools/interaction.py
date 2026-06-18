@@ -355,6 +355,190 @@ class TapByCoordinate(WDABaseTool):
             return self._fail(f"坐标点击失败 ({params['x']}, {params['y']}): {exc}")
 
 
+class GetTabBar(WDABaseTool):
+    """定位当前页面底部 TabBar，列出 Tab 或切换 Tab。"""
+
+    def __init__(self, wda):
+        super().__init__(
+            wda=wda,
+            name="get_tab_bar",
+            description=(
+                "定位当前页面底部 TabBar，列出所有 Tab 或切换 Tab。\n"
+                "- action='list'（默认）：返回结构化 Tab 列表（索引、名称、位置）\n"
+                "- action='switch'：切换到指定 Tab（按 index 或 tab_name）\n"
+                "- 纯图标 Tab 仍返回索引，支持按位置点击\n"
+                "- 不受 observe_screen XML 截断影响（精准 XPath 定位底部）\n"
+                "使用场景：多 Tab App（微信、淘宝、Boss直聘等）的导航\n"
+                "示例：get_tab_bar(action='list') → 列出所有 Tab\n"
+                "示例：get_tab_bar(action='switch', index=4) → 切换到第 5 个 Tab\n"
+                "示例：get_tab_bar(action='switch', tab_name='我的') → 按名称切换"
+            ),
+        )
+        self._cached = None  # 缓存: {items, tabs, selected_idx, selected_name}
+
+    def get_parameters(self) -> List[ToolParameter]:
+        return [
+            ToolParameter(name="action", type="string",
+                description="'list'（默认）/ 'switch'（切换）", required=False, default="list"),
+            ToolParameter(name="index", type="integer",
+                description="action='switch' 时按索引切换（0-based）", required=False),
+            ToolParameter(name="tab_name", type="string",
+                description="action='switch' 时按名称模糊匹配（不区分大小写）", required=False),
+        ]
+
+    def _find_tabbar(self) -> str | None:
+        bars = self.wda.find_elements("class name", "XCUIElementTypeTabBar")
+        return bars[0] if bars else None
+
+    def _get_tab_items(self, tabbar_id: str) -> list[tuple[str, str]]:
+        """快速提取 TabBar 直接子元素的文本（只查自身属性，不做深度遍历）。"""
+        try:
+            children = self.wda.find_elements_from_element(tabbar_id, "xpath", "./*")
+        except Exception:
+            return []
+
+        items = []
+        for child_id in children:
+            etype = self._safe_get_attr(child_id, "type", "")
+            if etype == "XCUIElementTypeImage":
+                continue
+
+            raw_label = self._safe_get_attr(child_id, "label", "").strip()
+            raw_name = self._safe_get_attr(child_id, "name", "").strip()
+
+            if raw_label:
+                # 复合标签: "招人, SPTabBar_Boss_zhaoren" → "招人"
+                text = raw_label.split(",")[0].strip()
+                if text and not text.isdigit():
+                    items.append((child_id, text))
+                    continue
+            if raw_name and not raw_name.startswith("button_") and not raw_name.isdigit():
+                items.append((child_id, raw_name))
+                continue
+
+        # 回退：直接子元素无文本时，只取 Button
+        if not items:
+            try:
+                buttons = self.wda.find_elements_from_element(tabbar_id, "class name", "XCUIElementTypeButton")
+            except Exception:
+                buttons = []
+            for btn_id in buttons:
+                label = self._safe_get_attr(btn_id, "label", "").strip()
+                name = self._safe_get_attr(btn_id, "name", "").strip()
+                text = label or name
+                if text and not text.isdigit():
+                    items.append((btn_id, text))
+        return items
+
+    def _is_selected(self, element_id: str) -> bool:
+        try:
+            if self.wda.is_element_selected(element_id):
+                return True
+        except Exception:
+            pass
+        try:
+            if self.wda.get_element_attribute(element_id, "value") == "1":
+                return True
+        except Exception:
+            pass
+        try:
+            if self.wda.get_element_attribute(element_id, "selected") == "true":
+                return True
+        except Exception:
+            pass
+        return False
+
+    def _build_tab_info(self, items: list[tuple[str, str]]) -> tuple[list[dict], int, str]:
+        """构建 Tab 列表，返回 (tabs, selected_idx, selected_name)。"""
+        tabs = []
+        sel_idx, sel_name = -1, ""
+        for i, (eid, display) in enumerate(items):
+            tabs.append({"index": i, "screen_name": display})
+            if self._is_selected(eid):
+                sel_idx, sel_name = i, display
+        if sel_idx == -1 and tabs:
+            sel_idx, sel_name = 0, tabs[0]["screen_name"]
+        return tabs, sel_idx, sel_name
+
+    def _discover(self):
+        """发现 TabBar 并缓存结果（idempotent）。"""
+        if self._cached is not None:
+            return  # 已有缓存
+        tabbar_id = self._find_tabbar()
+        if not tabbar_id:
+            self._cached = False  # 标记为无 TabBar
+            return
+        items = self._get_tab_items(tabbar_id)
+        if not items:
+            self._cached = False
+            return
+        tabs, sel_idx, sel_name = self._build_tab_info(items)
+        self._cached = {"element_ids": [eid for eid, _ in items],
+                        "tabs": tabs,
+                        "selected_index": sel_idx,
+                        "selected_name": sel_name}
+
+    def run(self, params: dict) -> ToolResponse:
+        action = params.get("action", "list")
+        index = params.get("index")
+        tab_name = params.get("tab_name")
+
+        if action == "switch":
+            if index is not None and tab_name is not None:
+                return self._fail("请只提供 index 或 tab_name 之一")
+            if index is None and tab_name is None:
+                return self._fail("action='switch' 时请提供 index 或 tab_name")
+
+        self._discover()
+        if self._cached is None or self._cached is False:
+            return self._ok(str({"found": False, "tab_count": 0, "selected_index": -1,
+                "selected_name": "", "tabs": [], "reason": "当前页面未检测到 TabBar 或无法提取标签"}),
+                {"found": False, "tab_count": 0, "selected_index": -1, "selected_name": "", "tabs": [],
+                 "reason": "当前页面未检测到 TabBar 或无法提取标签"})
+
+        c = self._cached
+        if action == "list":
+            data = {"found": True, "tab_count": len(c["tabs"]),
+                    "selected_index": c["selected_index"], "selected_name": c["selected_name"],
+                    "tabs": c["tabs"]}
+            return self._ok(str(data), data)
+
+        # action="switch"
+        target_idx = None
+        elem_to_click = None
+        if tab_name is not None:
+            matches = []
+            for i, eid in enumerate(c["element_ids"]):
+                display = c["tabs"][i]["screen_name"]
+                if tab_name.lower() == display.lower():
+                    matches.insert(0, {"index": i, "element_id": eid, "name": display})
+                elif tab_name.lower() in display.lower():
+                    matches.append({"index": i, "element_id": eid, "name": display})
+            if not matches:
+                names = [t["screen_name"] for t in c["tabs"]]
+                return self._fail(f"未找到匹配 '{tab_name}' 的 Tab，可用: {names}")
+            if len(matches) > 1:
+                return self._fail(f"'{tab_name}' 匹配到多个 Tab: {[(m['index'],m['name']) for m in matches]}，请用 index")
+            target_idx = matches[0]["index"]
+            elem_to_click = matches[0]["element_id"]
+        elif index is not None:
+            if index < 0 or index >= len(c["element_ids"]):
+                return self._fail(f"索引 {index} 超出范围，有效: 0-{len(c['element_ids'])-1}")
+            target_idx = index
+            elem_to_click = c["element_ids"][index]
+
+        if elem_to_click is None:
+            return self._fail("无法定位目标按钮")
+        try:
+            self.wda.click_element(elem_to_click)
+            self.wda.wait(0.5)
+            # 切换后清缓存，下次 list 会重新发现
+            self._cached = None
+            return self._ok(f"\u2705 已切换到 Tab [{target_idx}] {c['tabs'][target_idx]['screen_name']}")
+        except Exception as exc:
+            return self._fail(f"切换 Tab [{target_idx}] 失败: {exc}")
+
+
 def create_interaction_tools(wda) -> list[WDABaseTool]:
     return [
         TapByName(wda),
@@ -364,4 +548,5 @@ def create_interaction_tools(wda) -> list[WDABaseTool]:
         SwipeDirection(wda),
         LongPressByName(wda),
         TapByCoordinate(wda),
+        GetTabBar(wda),
     ]
