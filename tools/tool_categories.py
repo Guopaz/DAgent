@@ -25,6 +25,7 @@ ACTION_TOOLS = {
     "clear_interrupt",
     "dismiss_keyboard_if_present",
     "wait_seconds",
+    "wda_call",  # 通用 WDA 调用，大多数操作会改变屏幕状态
 }
 
 # 混合型工具：根据参数判断是否为动作工具

@@ -682,8 +682,8 @@ class WDAClient:
     
     # ========== Keys ==========
     
-    def send_keys(self, text: str) -> None:
-        """POST /session/:id/wda/keys - 发送按键"""
+    def send_global_keys(self, text: str) -> None:
+        """POST /session/:id/wda/keys - 全局键盘输入（不针对特定元素）"""
         body = {'value': list(text)}
         self._post(self._session_path('/wda/keys'), body)
     

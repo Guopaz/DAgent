@@ -27,6 +27,7 @@ from tools.interaction import create_interaction_tools
 from tools.app_lifecycle import create_app_lifecycle_tools
 from tools.error_handling import create_error_handling_tools
 from tools.device_info import create_device_info_tools
+from tools.wda_call import create_wda_call_tool
 
 
 def build_tool_registry(wda, monitor: Optional[ScreenMonitor] = None) -> ToolRegistry:
@@ -46,6 +47,7 @@ def build_tool_registry(wda, monitor: Optional[ScreenMonitor] = None) -> ToolReg
         + create_app_lifecycle_tools(wda)
         + create_error_handling_tools(wda)
         + create_device_info_tools(wda)
+        + create_wda_call_tool(wda)
     ):
         registry.register_tool(tool, auto_expand=False)
     return registry
