@@ -9,21 +9,23 @@ from hello_agents.tools import ToolParameter, ToolResponse
 from tools._base import WDABaseTool
 
 
-class TapByName(WDABaseTool):
-    """通过元素名称点击（最常用操作）。"""
+class TapElement(WDABaseTool):
+    """通过 name、xpath 或 element_id 点击元素（最常用操作）。"""
 
     def __init__(self, wda):
         super().__init__(
             wda=wda,
-            name="tap_by_name",
+            name="tap_element",
             description=(
-                "通过元素名称点击。这是最常用的操作工具。\n"
-                "- 自动定位元素（使用 name 策略）\n"
-                "- 点击前检查元素是否可见，不可见时返回明确的失败信息\n"
-                "- 点击后自动等待 1 秒，等待 UI 过渡完成\n"
-                "使用场景：点击按钮、开关、菜单项等任何有 label/name 的元素\n"
-                "示例：tap_by_name(name='设置') → 点击\u201c设置\u201d元素\n"
-                "示例：tap_by_name(name='Wi-Fi') → 点击 Wi-Fi 开关\n"
+                "点击元素。支持三种定位方式（三选一）：\n"
+                "- name：通过元素的 label/name 定位（最常用）\n"
+                "- xpath：通过 XPath 表达式定位（复杂场景）\n"
+                "- element_id：直接使用元素 ID（从 find_element 等工具获取）\n"
+                "点击前自动检查元素是否可见，点击后等待 1 秒等待 UI 过渡完成。\n"
+                "使用场景：点击按钮、开关、菜单项等任何可交互元素\n"
+                "示例：tap_element(name='设置') → 通过名称点击\n"
+                "示例：tap_element(xpath='//XCUIElementTypeButton[@name=\"确认\"]') → 通过 XPath 点击\n"
+                "示例：tap_element(element_id='12345') → 通过元素 ID 点击\n"
                 "注意：如果元素不可见（在屏幕外），请使用 scroll_to_find_and_tap"
             ),
         )
@@ -33,113 +35,174 @@ class TapByName(WDABaseTool):
             ToolParameter(
                 name="name",
                 type="string",
-                description="元素的 label 或 name，从 observe_screen 返回的 XML 中获取",
-                required=True,
+                description="元素的 label 或 name（三选一）",
+                required=False,
+            ),
+            ToolParameter(
+                name="xpath",
+                type="string",
+                description="XPath 定位表达式（三选一）",
+                required=False,
+            ),
+            ToolParameter(
+                name="element_id",
+                type="string",
+                description="元素 ID，从 find_element 等工具获取（三选一）",
+                required=False,
             ),
         ]
 
     def run(self, params: dict) -> ToolResponse:
-        name = params["name"]
-        element_id = self._find_by_name(name)
-        if not element_id:
-            return self._fail(
-                f"未找到元素：'{name}'，请先用 observe_screen 确认元素名称"
-            )
+        name = params.get("name")
+        xpath = params.get("xpath")
+        element_id = params.get("element_id")
+
+        # 参数校验：必须且只能提供一种定位方式
+        provided = [p for p in (name, xpath, element_id) if p]
+        if len(provided) == 0:
+            return self._fail("请提供 name、xpath 或 element_id 之一来定位元素")
+        if len(provided) > 1:
+            return self._fail("请只提供 name、xpath、element_id 之一，不要同时提供多个")
+
+        # 定位元素
+        locator_desc = ""
+        if name:
+            element_id = self._find_by_name(name)
+            locator_desc = f"name='{name}'"
+            if not element_id:
+                return self._fail(f"未找到元素：{locator_desc}，请先查看屏幕摘要确认元素名称")
+        elif xpath:
+            element_id = self.wda.find_element("xpath", xpath)
+            locator_desc = f"xpath='{xpath}'"
+            if not element_id:
+                return self._fail(f"未找到匹配 XPath 的元素：{xpath}")
+        else:
+            locator_desc = f"element_id='{element_id}'"
+
+        # 检查可见性
         if not self._is_visible(element_id):
             return self._fail(
-                f"元素 '{name}' 在 DOM 中存在但当前不可见（可能在屏幕外或被遮挡），"
+                f"元素 {locator_desc} 在 DOM 中存在但当前不可见（可能在屏幕外或被遮挡），"
                 "建议使用 scroll_to_find_and_tap 或先 clear_interrupt"
             )
+
+        # 点击
         try:
             self.wda.click_element(element_id)
             self.wda.wait(1.0)
-            return self._ok(f"✅ 已点击：{name}")
+            return self._ok(f"✅ 已点击：{locator_desc}")
         except Exception as exc:
-            return self._fail(f"点击失败：{name}（{exc}），建议 observe_screen 确认页面状态后重试")
+            return self._fail(f"点击失败：{locator_desc}（{exc}），建议查看屏幕摘要确认页面状态后重试")
 
 
-class TapByXPath(WDABaseTool):
-    """通过 XPath 点击元素。"""
+class InputText(WDABaseTool):
+    """在输入框中输入文本。"""
+
+    # 输入框元素类型
+    _INPUT_TYPES = (
+        "XCUIElementTypeTextField",
+        "XCUIElementTypeSecureTextField",
+        "XCUIElementTypeTextView",
+        "XCUIElementTypeSearchField",
+    )
 
     def __init__(self, wda):
         super().__init__(
             wda=wda,
-            name="tap_by_xpath",
+            name="input_text",
             description=(
-                "通过 XPath 表达式点击元素。\n"
-                "- 适用于 name 定位不到的复杂场景\n"
-                "- 点击前检查元素是否可见\n"
-                "- 点击后自动等待 1 秒\n"
-                "⚠️ 注意：XPath 依赖 UI 结构，App 更新后可能变化，优先使用 tap_by_name\n"
-                "使用场景：元素没有明确的 name/label，或需要按类型+位置定位\n"
-                "示例：tap_by_xpath(xpath='//XCUIElementTypeButton[@name=\"确认\"]')\n"
-                "示例：tap_by_xpath(xpath='//XCUIElementTypeCell[3]//XCUIElementTypeButton[1]')"
+                "在输入框中输入文本。\n"
+                "- name 可选：提供时按名称精确定位输入框；不提供时自动查找页面上的输入框（取最后一个）\n"
+                "- 定位输入框后先点击聚焦（确保 keyboard 弹出且输入目标正确）\n"
+                "- 点击后等待 0.3 秒，再清空已有内容，再输入新文本\n"
+                "- 输入完成后自动关闭键盘\n"
+                "使用场景：在搜索框、登录表单、设置项中输入文字\n"
+                "示例：input_text(name='搜索', text='WiFi 密码') → 在搜索框中输入\n"
+                "示例：input_text(text='hello') → 自动找到输入框并输入\n"
+                "示例：input_text(name='Apple ID', text='user@example.com')"
             ),
         )
 
     def get_parameters(self) -> List[ToolParameter]:
         return [
             ToolParameter(
-                name="xpath",
+                name="name",
                 type="string",
-                description="XPath 定位表达式",
+                description="输入框的 label 或 name（可选，不提供时自动查找输入框）",
+                required=False,
+            ),
+            ToolParameter(
+                name="text",
+                type="string",
+                description="要输入的文本内容",
                 required=True,
             ),
         ]
 
+    def _find_input_fields(self) -> list[tuple[str, str]]:
+        """查找页面上所有输入框，返回 [(element_id, name), ...] 列表。"""
+        results: list[tuple[str, str]] = []
+        for cls_name in self._INPUT_TYPES:
+            try:
+                element_ids = self.wda.find_elements("class name", cls_name)
+            except Exception:
+                continue
+            for eid in element_ids:
+                try:
+                    label = self.wda.get_element_attribute(eid, "label") or ""
+                except Exception:
+                    label = ""
+                try:
+                    ename = self.wda.get_element_name(eid) or ""
+                except Exception:
+                    ename = ""
+                display = label.strip() or ename.strip() or cls_name
+                results.append((eid, display))
+        return results
+
+    def _locate_input(self, name: str | None) -> tuple[str | None, str]:
+        """
+        定位输入框。
+
+        Returns:
+            (element_id, description) — element_id 为 None 表示未找到
+        """
+        if name:
+            # 优先按 name 精确查找
+            element_id = self._find_by_name(name)
+            if element_id:
+                return element_id, f"name='{name}'"
+
+            # name 未直接命中，查找所有输入框后倒序模糊匹配
+            fields = self._find_input_fields()
+            for eid, display in reversed(fields):
+                if name.lower() in display.lower():
+                    return eid, f"name='{name}' (模糊匹配到 '{display}')"
+
+            return None, f"name='{name}'"
+
+        # 未提供 name：查找所有输入框，取最后一个（通常是主输入框）
+        fields = self._find_input_fields()
+        if not fields:
+            return None, "（页面上未找到任何输入框）"
+
+        eid, display = fields[-1]
+        return eid, f"自动选择输入框 '{display}'（共找到 {len(fields)} 个，取最后一个）"
+
     def run(self, params: dict) -> ToolResponse:
-        xpath = params["xpath"]
-        element_id = self.wda.find_element("xpath", xpath)
-        if not element_id:
-            return self._fail(f"未找到匹配 XPath 的元素：{xpath}")
-        if not self._is_visible(element_id):
-            return self._fail(f"XPath 匹配到元素但不可见：{xpath}")
-        try:
-            self.wda.click_element(element_id)
-            self.wda.wait(1.0)
-            return self._ok(f"✅ 已点击 XPath：{xpath}")
-        except Exception as exc:
-            return self._fail(f"点击失败：{xpath}（{exc}）")
-
-
-class InputTextByName(WDABaseTool):
-    """通过名称定位输入框并输入文本。"""
-
-    def __init__(self, wda):
-        super().__init__(
-            wda=wda,
-            name="input_text_by_name",
-            description=(
-                "在指定输入框中输入文本。\n"
-                "- 定位输入框后先点击聚焦（确保 keyboard 弹出且输入目标正确）\n"
-                "- 点击后等待 0.3 秒，再清空已有内容，再输入新文本\n"
-                "- 输入完成后自动关闭键盘\n"
-                "使用场景：在搜索框、登录表单、设置项中输入文字\n"
-                "示例：input_text_by_name(name='搜索', text='WiFi 密码')\n"
-                "示例：input_text_by_name(name='Apple ID', text='user@example.com')"
-            ),
-        )
-
-    def get_parameters(self) -> List[ToolParameter]:
-        return [
-            ToolParameter(name="name", type="string", description="输入框的 label 或 name", required=True),
-            ToolParameter(name="text", type="string", description="要输入的文本内容", required=True),
-        ]
-
-    def run(self, params: dict) -> ToolResponse:
-        name = params["name"]
+        name = params.get("name")
         text = params["text"]
 
-        element_id = self._find_by_name(name)
+        element_id, locator_desc = self._locate_input(name)
         if not element_id:
-            return self._fail(f"未找到输入框：'{name}'，请先用 observe_screen 确认")
+            return self._fail(f"未找到输入框：{locator_desc}，请查看屏幕摘要确认")
 
         # 步骤 1: 点击聚焦
         try:
             self.wda.click_element(element_id)
             self.wda.wait(0.3)
         except Exception as exc:
-            return self._fail(f"点击输入框失败：{name}（{exc}）")
+            return self._fail(f"点击输入框失败：{locator_desc}（{exc}）")
 
         # 步骤 2: 清空已有内容
         try:
@@ -155,7 +218,7 @@ class InputTextByName(WDABaseTool):
         try:
             self.wda.send_keys(element_id, text)
         except Exception as exc:
-            return self._fail(f"输入文本失败：{name}（{exc}）")
+            return self._fail(f"输入文本失败：{locator_desc}（{exc}）")
 
         # 步骤 4: 关闭键盘
         try:
@@ -163,7 +226,7 @@ class InputTextByName(WDABaseTool):
         except Exception:
             pass
 
-        return self._ok(f"✅ 已在 '{name}' 输入：{text}")
+        return self._ok(f"✅ 已在 {locator_desc} 输入：{text}")
 
 
 class ScrollToFindAndTap(WDABaseTool):
@@ -397,43 +460,33 @@ class GetTabBar(WDABaseTool):
         return bars[0] if bars else None
 
     def _get_tab_items(self, tabbar_id: str) -> list[tuple[str, str]]:
-        """快速提取 TabBar 直接子元素的文本（只查自身属性，不做深度遍历）。"""
+        """遍历 TabBar 所有子元素，找出 label 不为空的元素并去重。"""
+        # 查找 TabBar 下所有子元素
         try:
-            children = self.wda.find_elements_from_element(tabbar_id, "xpath", "./*")
+            all_children = self.wda.find_elements_from_element(tabbar_id, "xpath", ".//*")
         except Exception:
             return []
 
-        items = []
-        for child_id in children:
-            etype = self._safe_get_attr(child_id, "type", "")
-            if etype == "XCUIElementTypeImage":
-                continue
+        # 收集 label 不为空的元素，按出现顺序去重
+        seen_labels: set[str] = set()
+        items: list[tuple[str, str]] = []
 
+        for child_id in all_children:
             raw_label = self._safe_get_attr(child_id, "label", "").strip()
-            raw_name = self._safe_get_attr(child_id, "name", "").strip()
-
-            if raw_label:
-                # 复合标签: "招人, SPTabBar_Boss_zhaoren" → "招人"
-                text = raw_label.split(",")[0].strip()
-                if text and not text.isdigit():
-                    items.append((child_id, text))
-                    continue
-            if raw_name and not raw_name.startswith("button_") and not raw_name.isdigit():
-                items.append((child_id, raw_name))
+            if not raw_label:
                 continue
 
-        # 回退：直接子元素无文本时，只取 Button
-        if not items:
-            try:
-                buttons = self.wda.find_elements_from_element(tabbar_id, "class name", "XCUIElementTypeButton")
-            except Exception:
-                buttons = []
-            for btn_id in buttons:
-                label = self._safe_get_attr(btn_id, "label", "").strip()
-                name = self._safe_get_attr(btn_id, "name", "").strip()
-                text = label or name
-                if text and not text.isdigit():
-                    items.append((btn_id, text))
+            # 处理复合标签: "招人, SPTabBar_Boss_zhaoren" → "招人"
+            text = raw_label.split(",")[0].strip()
+            if not text or text.isdigit():
+                continue
+
+            # 去重
+            if text in seen_labels:
+                continue
+            seen_labels.add(text)
+            items.append((child_id, text))
+
         return items
 
     def _is_selected(self, element_id: str) -> bool:
@@ -545,14 +598,109 @@ class GetTabBar(WDABaseTool):
             return self._fail(f"切换 Tab [{target_idx}] 失败: {exc}")
 
 
+class TapKeyboardReturn(WDABaseTool):
+    """快速点击键盘上的 Return/Done/Search/Send 键。"""
+
+    # Return 键可能的名称（中英文）
+    _RETURN_KEY_NAMES = {
+        "return", "Return", "返回",
+        "search", "Search", "搜索",
+        "send", "Send", "发送",
+        "done", "Done", "完成",
+        "go", "Go", "前往",
+        "join", "Join", "加入",
+        "next", "Next", "下一个",
+        "continue", "Continue", "继续",
+        "submit", "Submit", "提交",
+    }
+
+    def __init__(self, wda):
+        super().__init__(
+            wda=wda,
+            name="tap_keyboard_return",
+            description=(
+                "快速点击键盘上的确认键（Return/Done/Search/Send 等）。\n"
+                "- 自动检测键盘是否弹出（通过 XCUIElementTypeKeyboard）\n"
+                "- 自动识别确认键的类型（发送/搜索/完成/前往/提交等）\n"
+                "- 点击后等待 0.5 秒\n"
+                "使用场景：输入文本后需要按确认键提交（发送消息、搜索、提交表单等）\n"
+                "示例：tap_keyboard_return() → 点击键盘确认键\n"
+                "注意：input_text 已自动关闭键盘，仅在需要触发确认动作时使用"
+            ),
+        )
+
+    def get_parameters(self) -> List[ToolParameter]:
+        return []
+
+    def run(self, params: dict) -> ToolResponse:
+        # 步骤 1: 检查键盘是否弹出
+        try:
+            keyboards = self.wda.find_elements("class name", "XCUIElementTypeKeyboard")
+        except Exception:
+            keyboards = []
+
+        if not keyboards:
+            return self._fail("未检测到键盘，请先点击输入框或使用 input_text 输入文本")
+
+        keyboard_id = keyboards[0]
+
+        # 步骤 2: 在键盘中查找所有按钮
+        try:
+            buttons = self.wda.find_elements_from_element(
+                keyboard_id, "class name", "XCUIElementTypeButton"
+            )
+        except Exception:
+            buttons = []
+
+        if not buttons:
+            return self._fail("键盘中未找到任何按钮")
+
+        # 步骤 3: 倒序遍历按钮，匹配确认键名称
+        matched_id = None
+        matched_name = ""
+        for btn_id in reversed(buttons):
+            try:
+                label = (self.wda.get_element_attribute(btn_id, "label") or "").strip()
+            except Exception:
+                label = ""
+            try:
+                name = (self.wda.get_element_name(btn_id) or "").strip()
+            except Exception:
+                name = ""
+
+            display = label or name
+            if display in self._RETURN_KEY_NAMES:
+                matched_id = btn_id
+                matched_name = display
+                break
+
+        if not matched_id:
+            # 回退：取最后一个按钮（通常是确认键）
+            matched_id = buttons[-1]
+            try:
+                matched_name = (
+                    self.wda.get_element_attribute(matched_id, "label") or ""
+                ).strip() or "未知"
+            except Exception:
+                matched_name = "未知"
+
+        # 步骤 4: 点击确认键
+        try:
+            self.wda.click_element(matched_id)
+            self.wda.wait(0.5)
+            return self._ok(f"✅ 已点击键盘确认键：'{matched_name}'")
+        except Exception as exc:
+            return self._fail(f"点击键盘确认键失败：{exc}")
+
+
 def create_interaction_tools(wda) -> list[WDABaseTool]:
     return [
-        TapByName(wda),
-        TapByXPath(wda),
-        InputTextByName(wda),
+        TapElement(wda),
+        InputText(wda),
         ScrollToFindAndTap(wda),
         SwipeDirection(wda),
         LongPressByName(wda),
         TapByCoordinate(wda),
         GetTabBar(wda),
+        TapKeyboardReturn(wda),
     ]

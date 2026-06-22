@@ -3,7 +3,7 @@ import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from tests.base import connect_wda
-from tools.interaction import GetTabBar, TapByName
+from tools.interaction import GetTabBar
 from tools.device_info import WaitSeconds
 
 wda = connect_wda()

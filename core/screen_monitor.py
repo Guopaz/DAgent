@@ -4,6 +4,7 @@ import re
 import time
 import xml.etree.ElementTree as ET
 from typing import Optional
+from wda_client import WDAClient
 
 
 class ScreenMonitor:
@@ -19,7 +20,7 @@ class ScreenMonitor:
     线程安全：单线程 Agent 场景下无需加锁
     """
 
-    def __init__(self, wda_client, xml_max_length: int = 20000, post_action_delay: float = 0.5):
+    def __init__(self, wda_client: WDAClient, xml_max_length: int = 30000, post_action_delay: float = 0.5):
         """
         Args:
             wda_client: WDAClient 实例

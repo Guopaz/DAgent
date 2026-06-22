@@ -9,7 +9,7 @@ wda = connect_wda()
 tool = ObserveScreen(wda)
 
 print("\n=== XML 模式 ===")
-print(tool.run({"mode": "xml"}).text[:500])
+print(tool.run({"mode": "xml"}).text[:50000])
 
 print("\n=== 截图模式 ===")
 r = tool.run({"mode": "screenshot"})

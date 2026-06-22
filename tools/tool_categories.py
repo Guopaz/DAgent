@@ -10,10 +10,9 @@ OBSERVATION_TOOLS = {
 
 # 动作类工具：会改变屏幕状态，执行后需要自动刷新
 ACTION_TOOLS = {
-    "tap_by_name",
-    "tap_by_xpath",
+    "tap_element",
     "tap_by_coordinate",
-    "input_text_by_name",
+    "input_text",
     "scroll_to_find_and_tap",
     "swipe_direction",
     "long_press_by_name",
@@ -25,6 +24,7 @@ ACTION_TOOLS = {
     "clear_interrupt",
     "dismiss_keyboard_if_present",
     "wait_seconds",
+    "tap_keyboard_return",
     "wda_call",  # 通用 WDA 调用，大多数操作会改变屏幕状态
 }
 

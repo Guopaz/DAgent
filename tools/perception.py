@@ -60,9 +60,9 @@ class ObserveScreen(WDABaseTool):
 
             if mode == "xml":
                 xml = state["xml"]
-                if len(xml) > 20000:
+                if len(xml) > 30000:
                     return self._ok(
-                        xml[:20000] + f"\n... [XML 截断，总长度={len(xml)}，"
+                        xml[:30000] + f"\n... [XML 截断，总长度={len(xml)}，"
                         "建议用 inspect_element 查看特定元素]"
                     )
                 return self._ok(xml)
