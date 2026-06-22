@@ -151,6 +151,9 @@ class ReActAgent(Agent):
         # 构建工具 schemas（包含内置工具和用户工具）
         tool_schemas = self._build_tool_schemas()
 
+        # ★ Hook: 循环开始前（子类可覆写，用于初始化屏幕监听等）
+        self._on_loop_start(messages)
+
         current_step = 0
         total_tokens = 0
 
@@ -169,6 +172,9 @@ class ReActAgent(Agent):
 
             # 保存当前步数（用于异常时保存）
             self._current_step = current_step
+
+            # ★ Hook: 每步 LLM 调用前（子类可覆写，用于注入屏幕状态）
+            self._before_llm_call(messages)
 
             # 调用 LLM（Function Calling）
             try:
@@ -355,12 +361,18 @@ class ReActAgent(Agent):
                     else:
                         print(f"👀 观察: {result}")
 
+                    # ★ Hook: 工具执行后（子类可覆写，用于自动刷新屏幕）
+                    self._after_tool_execution(messages, tool_name, arguments, result)
+
                     # 添加工具结果到消息
                     messages.append({
                         "role": "tool",
                         "tool_call_id": tool_call_id,
                         "content": result
                     })
+
+            # ★ Hook: 每步结束后（子类可覆写，用于裁剪消息等）
+            self._after_step(messages, current_step)
 
         # 达到最大步数
         print("⏰ 已达到最大步数，流程终止。")
@@ -385,6 +397,44 @@ class ReActAgent(Agent):
             self.trace_logger.finalize()
 
         return final_answer
+
+    # ---- Hook 方法（默认空实现，子类按需覆写）----
+
+    def _on_loop_start(self, messages: list):
+        """循环开始前调用，用于初始化
+        
+        Args:
+            messages: 消息列表（可修改）
+        """
+        pass
+
+    def _before_llm_call(self, messages: list):
+        """每次 LLM 调用前调用
+        
+        Args:
+            messages: 消息列表（可修改）
+        """
+        pass
+
+    def _after_tool_execution(self, messages: list, tool_name: str, arguments: dict, result: str):
+        """工具执行后调用
+        
+        Args:
+            messages: 消息列表（可修改）
+            tool_name: 工具名称
+            arguments: 工具参数
+            result: 工具执行结果
+        """
+        pass
+
+    def _after_step(self, messages: list, step: int):
+        """每步结束后调用
+        
+        Args:
+            messages: 消息列表（可修改）
+            step: 当前步数
+        """
+        pass
 
     def _build_messages(self, input_text: str) -> List[Dict[str, str]]:
         """构建消息列表"""

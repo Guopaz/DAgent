@@ -2,45 +2,49 @@
 
 from __future__ import annotations
 
-from typing import List
+from typing import List, Optional, TYPE_CHECKING
 
 from hello_agents.tools import ToolParameter, ToolResponse
 
 from tools._base import WDABaseTool
 
+if TYPE_CHECKING:
+    from core.screen_monitor import ScreenMonitor
+
 
 class ObserveScreen(WDABaseTool):
-    """获取当前屏幕的 UI 元素树（XML）或截图。"""
+    """获取当前屏幕状态（优先从缓存读取）。"""
 
-    def __init__(self, wda):
+    def __init__(self, wda, monitor: Optional[ScreenMonitor] = None):
         super().__init__(
             wda=wda,
             name="observe_screen",
             description=(
-                "获取当前屏幕的 UI 状态。\n"
-                "- 默认返回 XML 元素树（模式和 get_source 相同），包含所有元素的 label、name、type、位置信息\n"
-                "- 也支持返回截图（mode='screenshot'），返回 base64 PNG，适用于需要视觉判断的场景（如图片、颜色）\n"
-                "- XML 超过 25000 字符时自动截断，在最后一个完整标签处切断\n"
-                "使用场景：每个操作步骤的第一步，了解当前页面有哪些元素可以交互\n"
-                "示例：observe_screen() → 返回 XML 元素树\n"
-                "示例：observe_screen(mode='screenshot') → 返回截图 base64"
+                "获取当前屏幕状态。\n"
+                "- 屏幕状态在每个操作后自动刷新，此工具从缓存读取，零延迟\n"
+                "- mode='summary'（默认）：返回精简摘要\n"
+                "- mode='xml'：返回完整 XML 元素树\n"
+                "- mode='screenshot'：返回截图 base64（需要实际 WDA 调用）\n"
+                "注意：通常无需主动调用此工具，屏幕状态已自动注入到上下文中"
             ),
         )
+        self.monitor = monitor  # 可选注入，None 时降级为直接调用 WDA
 
     def get_parameters(self) -> List[ToolParameter]:
         return [
             ToolParameter(
                 name="mode",
                 type="string",
-                description="获取模式：'xml'（默认，返回 UI 元素树）或 'screenshot'（返回截图）",
+                description="获取模式：'summary'（默认）/ 'xml' / 'screenshot'",
                 required=False,
-                default="xml",
+                default="summary",
             ),
         ]
 
     def run(self, params: dict) -> ToolResponse:
-        mode = params.get("mode", "xml")
+        mode = params.get("mode", "summary")
 
+        # 截图模式：始终需要实际 WDA 调用
         if mode == "screenshot":
             data = self.wda.get_screenshot()
             if not data:
@@ -49,7 +53,28 @@ class ObserveScreen(WDABaseTool):
                 return self._ok(f"[截图已获取，base64 长度={len(data)}，已截断以节省上下文]")
             return self._ok(data)
 
-        # 默认 XML 模式
+        # 有缓存时从缓存读取
+        if self.monitor and self.monitor.is_valid():
+            state = self.monitor.get_screen_state()
+            changes = self.monitor.detect_changes()
+
+            if mode == "xml":
+                xml = state["xml"]
+                if len(xml) > 20000:
+                    return self._ok(
+                        xml[:20000] + f"\n... [XML 截断，总长度={len(xml)}，"
+                        "建议用 inspect_element 查看特定元素]"
+                    )
+                return self._ok(xml)
+
+            # 默认 summary 模式
+            result = state["summary"]
+            if changes:
+                result += f"\n\n最近变化: {changes}"
+            result += f"\n\n📊 快照 #{state['snapshot_count']}"
+            return self._ok(result)
+
+        # 降级：无缓存时直接调用 WDA
         source = self.wda.get_source()
         if not source:
             return self._fail("无法获取屏幕 XML（WDA 可能未连接或会话已过期，尝试重新创建会话）")
@@ -120,5 +145,5 @@ class InspectElement(WDABaseTool):
         return self._ok(str(data), data=data)
 
 
-def create_perception_tools(wda) -> list[WDABaseTool]:
-    return [ObserveScreen(wda), InspectElement(wda)]
+def create_perception_tools(wda, monitor: Optional[ScreenMonitor] = None) -> list[WDABaseTool]:
+    return [ObserveScreen(wda, monitor), InspectElement(wda)]

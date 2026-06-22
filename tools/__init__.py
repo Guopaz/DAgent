@@ -10,9 +10,17 @@ hello_agents.tools.Tool，实现 run() 和 get_parameters()，无需中间适配
     app_lifecycle.py   — 应用工具（3 个）：launch_and_wait, restart_app, check_app_status
     error_handling.py  — 异常处理（4 个）：handle_alert, dismiss_keyboard_if_present, ...
     device_info.py     — 设备工具（4 个）：get_device_summary, press_home_button, ...
+    tool_categories.py — 工具分类标记（OBSERVATION_TOOLS / ACTION_TOOLS / CONDITIONAL_ACTION_TOOLS）
 """
 
+from __future__ import annotations
+
+from typing import Optional, TYPE_CHECKING
+
 from hello_agents.tools import ToolRegistry
+
+if TYPE_CHECKING:
+    from core.screen_monitor import ScreenMonitor
 
 from tools.perception import create_perception_tools
 from tools.interaction import create_interaction_tools
@@ -21,15 +29,19 @@ from tools.error_handling import create_error_handling_tools
 from tools.device_info import create_device_info_tools
 
 
-def build_tool_registry(wda) -> ToolRegistry:
+def build_tool_registry(wda, monitor: Optional[ScreenMonitor] = None) -> ToolRegistry:
     """构建标准的 HelloAgents ToolRegistry，注册所有高层 WDA Action 工具。
 
     每个工具都是 Tool 的子类，直接通过 registry.register_tool() 注册，
     无需 adapter 桥接层。
+
+    Args:
+        wda: WDAClient 实例
+        monitor: ScreenMonitor 实例（可选），用于 observe_screen 缓存读取
     """
     registry = ToolRegistry()
     for tool in (
-        create_perception_tools(wda)
+        create_perception_tools(wda, monitor)
         + create_interaction_tools(wda)
         + create_app_lifecycle_tools(wda)
         + create_error_handling_tools(wda)
