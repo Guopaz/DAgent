@@ -289,7 +289,13 @@ class SwipeDirection(WDABaseTool):
 
     def run(self, params: dict) -> ToolResponse:
         direction = params["direction"]
-        self.wda.scroll(direction, 0.5)
+        
+        if direction not in ("up", "down", "left", "right"):
+            return self._fail(f"不支持的方向: {direction}，请使用 up/down/left/right")
+        
+        # 使用 /wda/swipe API（direction + velocity 格式）
+        # velocity=2000 像素/秒，足够快以避免触发长按
+        self.wda.swipe(direction, velocity=2000)
         return self._ok(f"✅ 已向 {direction} 滑动")
 
 

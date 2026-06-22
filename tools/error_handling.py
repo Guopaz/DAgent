@@ -71,7 +71,7 @@ class HandleAlert(WDABaseTool):
             elif action == "custom" and button_name:
                 matched = next((b for b in buttons if button_name.lower() in b.lower()), None)
                 if matched:
-                    self.wda.alert_action(matched)
+                    self.wda.accept_alert()
                     return self._ok(f"✅ 已点击弹窗按钮：{matched}")
                 return self._fail(f"未找到按钮 '{button_name}'，可用按钮：{buttons}")
             else:

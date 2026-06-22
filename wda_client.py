@@ -220,9 +220,14 @@ class WDAClient:
         body = {'value': list(text)}
         self._post(self._session_path(f'/element/{element_id}/value'), body)
     
-    def keyboard_input(self, element_id: str, text: str) -> None:
-        """POST /session/:id/wda/element/:eid/keyboardInput - 通过键盘输入"""
-        body = {'value': list(text)}
+    def keyboard_input(self, element_id: str, keys: List[str]) -> None:
+        """POST /session/:id/wda/element/:eid/keyboardInput - 键盘输入
+        
+        Args:
+            element_id: 元素 ID（传 "0" 表示对 activeApplication 输入）
+            keys: 按键数组，每项可以是字符串或 {"key": str, "modifierFlags": int}
+        """
+        body = {'keys': keys}
         self._post(self._session_path(f'/wda/element/{element_id}/keyboardInput'), body)
     
     def clear_element(self, element_id: str) -> None:
@@ -233,8 +238,14 @@ class WDAClient:
         """POST /session/:id/wda/element/:eid/focuse - 聚焦元素"""
         self._post(self._session_path(f'/wda/element/{element_id}/focuse'))
     
-    def select_pickerwheel(self, element_id: str, order: str, offset: int = 1) -> None:
-        """POST /session/:id/wda/pickerwheel/:eid/select - 选择滚轮"""
+    def select_pickerwheel(self, element_id: str, order: str, offset: float = 0.2) -> None:
+        """POST /session/:id/wda/pickerwheel/:eid/select - 选择滚轮
+        
+        Args:
+            element_id: 元素 ID
+            order: 滚动方向 "next" 或 "previous"
+            offset: 偏移量，范围 (0.0, 0.5]，默认 0.2
+        """
         body = {'order': order, 'offset': offset}
         self._post(self._session_path(f'/wda/pickerwheel/{element_id}/select'), body)
     
@@ -244,19 +255,40 @@ class WDAClient:
         """POST /session/:id/wda/tap - 点击坐标"""
         self._post(self._session_path('/wda/tap'), {'x': x, 'y': y})
     
-    def swipe(self, from_x: int, from_y: int, to_x: int, to_y: int, duration: float = 1.0) -> None:
-        """POST /session/:id/wda/swipe - 滑动"""
-        body = {'fromX': from_x, 'fromY': from_y, 'toX': to_x, 'toY': to_y, 'duration': duration}
+    def swipe(self, direction: str, velocity: float = 1000, x: int = None, y: int = None) -> None:
+        """POST /session/:id/wda/swipe - 滑动
+        
+        Args:
+            direction: 滑动方向 'up' / 'down' / 'left' / 'right'
+            velocity: 滑动速度（像素/秒），越大越快
+            x, y: 可选的起始坐标（绝对坐标），必须同时提供或不提供
+        """
+        body = {'direction': direction}
+        if velocity:
+            body['velocity'] = velocity
+        if x is not None and y is not None:
+            body['x'] = x
+            body['y'] = y
         self._post(self._session_path('/wda/swipe'), body)
     
-    def pinch(self, from_x: int, from_y: int, to_x: int, to_y: int, duration: float = 1.0) -> None:
-        """POST /session/:id/wda/pinch - 捏合"""
-        body = {'fromX': from_x, 'fromY': from_y, 'toX': to_x, 'toY': to_y, 'duration': duration}
+    def pinch(self, scale: float, velocity: float = 1.0) -> None:
+        """POST /session/:id/wda/pinch - 捏合
+        
+        Args:
+            scale: 缩放比例（<1 缩小，>1 放大）
+            velocity: 速度
+        """
+        body = {'scale': scale, 'velocity': velocity}
         self._post(self._session_path('/wda/pinch'), body)
     
-    def rotate(self, from_x: int, from_y: int, to_x: int, to_y: int, duration: float = 1.0) -> None:
-        """POST /session/:id/wda/rotate - 旋转"""
-        body = {'fromX': from_x, 'fromY': from_y, 'toX': to_x, 'toY': to_y, 'duration': duration}
+    def rotate(self, rotation: float, velocity: float = 1.0) -> None:
+        """POST /session/:id/wda/rotate - 旋转
+        
+        Args:
+            rotation: 旋转角度
+            velocity: 速度
+        """
+        body = {'rotation': rotation, 'velocity': velocity}
         self._post(self._session_path('/wda/rotate'), body)
     
     def double_tap(self, x: int, y: int) -> None:
@@ -272,9 +304,14 @@ class WDAClient:
         body = {'x': x, 'y': y, 'duration': duration}
         self._post(self._session_path('/wda/touchAndHold'), body)
     
-    def scroll(self, direction: str = 'down', distance: float = 0.5) -> None:
-        """POST /session/:id/wda/scroll - 滚动"""
-        body = {'direction': direction, 'distance': distance}
+    def scroll(self, direction: str = 'down', distance: float = 1.0) -> None:
+        """POST /session/:id/wda/scroll - 滚动
+        
+        Args:
+            direction: 滚动方向 'up' / 'down' / 'left' / 'right'
+            distance: 滚动距离（WDA 内部为 string 类型，默认 "1.0"）
+        """
+        body = {'direction': direction, 'distance': str(distance)}
         self._post(self._session_path('/wda/scroll'), body)
     
     def drag(self, from_x: int, from_y: int, to_x: int, to_y: int, duration: float = 1.0) -> None:
@@ -282,9 +319,27 @@ class WDAClient:
         body = {'fromX': from_x, 'fromY': from_y, 'toX': to_x, 'toY': to_y, 'duration': duration}
         self._post(self._session_path('/wda/dragfromtoforduration'), body)
     
-    def press_and_drag(self, from_x: int, from_y: int, to_x: int, to_y: int, velocity: float = 800.0) -> None:
-        """POST /session/:id/wda/pressAndDragWithVelocity - 按下并拖拽"""
-        body = {'fromX': from_x, 'fromY': from_y, 'toX': to_x, 'toY': to_y, 'velocity': velocity}
+    def press_and_drag(self, from_x: int, from_y: int, to_x: int, to_y: int, 
+                       press_duration: float = 0.5, velocity: float = 800.0, 
+                       hold_duration: float = 0.5) -> None:
+        """POST /session/:id/wda/pressAndDragWithVelocity - 按下并拖拽
+        
+        Args:
+            from_x: 起始 X 坐标
+            from_y: 起始 Y 坐标
+            to_x: 结束 X 坐标
+            to_y: 结束 Y 坐标
+            press_duration: 按压持续时间（秒）
+            velocity: 拖拽速度（像素/秒）
+            hold_duration: 到达后保持时间（秒）
+        """
+        body = {
+            'fromX': from_x, 'fromY': from_y,
+            'toX': to_x, 'toY': to_y,
+            'pressDuration': press_duration,
+            'velocity': velocity,
+            'holdDuration': hold_duration
+        }
         self._post(self._session_path('/wda/pressAndDragWithVelocity'), body)
     
     def force_touch(self, x: int, y: int, pressure: float = 1.0, duration: float = 1.0) -> None:
@@ -292,9 +347,14 @@ class WDAClient:
         body = {'x': x, 'y': y, 'pressure': pressure, 'duration': duration}
         self._post(self._session_path('/wda/forceTouch'), body)
     
-    def tap_with_number_of_taps(self, x: int, y: int, number_of_taps: int = 1, number_of_touches: int = 1) -> None:
-        """POST /session/:id/wda/tapWithNumberOfTaps - 多次点击"""
-        body = {'x': x, 'y': y, 'numberOfTaps': number_of_taps, 'numberOfTouches': number_of_touches}
+    def tap_with_number_of_taps(self, number_of_taps: int = 1, number_of_touches: int = 1) -> None:
+        """POST /session/:id/wda/tapWithNumberOfTaps - 多次点击
+        
+        Args:
+            number_of_taps: 点击次数
+            number_of_touches: 手指数
+        """
+        body = {'numberOfTaps': number_of_taps, 'numberOfTouches': number_of_touches}
         self._post(self._session_path('/wda/tapWithNumberOfTaps'), body)
     
     # ========== Element Gestures (requires session) ==========
@@ -309,9 +369,9 @@ class WDAClient:
         body = {'scale': scale, 'velocity': velocity}
         self._post(self._session_path(f'/wda/element/{element_id}/pinch'), body)
     
-    def rotate_element(self, element_id: str, rotation: float, duration: float = 1.0) -> None:
+    def rotate_element(self, element_id: str, rotation: float, velocity: float = 1.0) -> None:
         """POST /session/:id/wda/element/:eid/rotate - 旋转元素"""
-        body = {'rotation': rotation, 'duration': duration}
+        body = {'rotation': rotation, 'velocity': velocity}
         self._post(self._session_path(f'/wda/element/{element_id}/rotate'), body)
     
     def double_tap_element(self, element_id: str) -> None:
@@ -327,9 +387,15 @@ class WDAClient:
         body = {'duration': duration}
         self._post(self._session_path(f'/wda/element/{element_id}/touchAndHold'), body)
     
-    def scroll_element(self, element_id: str, direction: str = 'down', distance: float = 0.5) -> None:
-        """POST /session/:id/wda/element/:eid/scroll - 在元素上滚动"""
-        body = {'direction': direction, 'distance': distance}
+    def scroll_element(self, element_id: str, direction: str = 'down', distance: float = 1.0) -> None:
+        """POST /session/:id/wda/element/:eid/scroll - 在元素上滚动
+        
+        Args:
+            element_id: 元素 ID
+            direction: 滚动方向 'up' / 'down' / 'left' / 'right'
+            distance: 滚动距离（WDA 内部为 string 类型，默认 "1.0"）
+        """
+        body = {'direction': direction, 'distance': str(distance)}
         self._post(self._session_path(f'/wda/element/{element_id}/scroll'), body)
     
     def scroll_to_element(self, element_id: str, target_element_id: str) -> None:
@@ -337,14 +403,38 @@ class WDAClient:
         body = {'toVisible': True}
         self._post(self._session_path(f'/wda/element/{element_id}/scrollTo'), body)
     
-    def drag_element(self, element_id: str, to_x: int, to_y: int, duration: float = 1.0) -> None:
-        """POST /session/:id/wda/element/:eid/dragfromtoforduration - 拖拽元素"""
-        body = {'toX': to_x, 'toY': to_y, 'duration': duration}
+    def drag_element(self, element_id: str, from_x: int, from_y: int, to_x: int, to_y: int, duration: float = 1.0) -> None:
+        """POST /session/:id/wda/element/:eid/dragfromtoforduration - 拖拽元素
+        
+        Args:
+            element_id: 元素 ID
+            from_x: 起始 X 坐标（相对于元素）
+            from_y: 起始 Y 坐标
+            to_x: 结束 X 坐标
+            to_y: 结束 Y 坐标
+            duration: 拖拽持续时间（秒）
+        """
+        body = {'fromX': from_x, 'fromY': from_y, 'toX': to_x, 'toY': to_y, 'duration': duration}
         self._post(self._session_path(f'/wda/element/{element_id}/dragfromtoforduration'), body)
     
-    def press_and_drag_element(self, element_id: str, to_x: int, to_y: int, velocity: float = 800.0) -> None:
-        """POST /session/:id/wda/element/:eid/pressAndDragWithVelocity - 按下并拖拽元素"""
-        body = {'toX': to_x, 'toY': to_y, 'velocity': velocity}
+    def press_and_drag_element(self, element_id: str, to_element_id: str,
+                               press_duration: float = 0.5, velocity: float = 800.0,
+                               hold_duration: float = 0.5) -> None:
+        """POST /session/:id/wda/element/:eid/pressAndDragWithVelocity - 元素间拖拽
+        
+        Args:
+            element_id: 起始元素 ID
+            to_element_id: 目标元素 ID
+            press_duration: 按压持续时间（秒）
+            velocity: 拖拽速度（像素/秒）
+            hold_duration: 到达后保持时间（秒）
+        """
+        body = {
+            'toElement': to_element_id,
+            'pressDuration': press_duration,
+            'velocity': velocity,
+            'holdDuration': hold_duration
+        }
         self._post(self._session_path(f'/wda/element/{element_id}/pressAndDragWithVelocity'), body)
     
     def force_touch_element(self, element_id: str, pressure: float = 1.0, duration: float = 1.0) -> None:
@@ -472,9 +562,13 @@ class WDAClient:
         result = self._get('/wda/device/info')
         return result.get('value', {})
     
-    def set_device_appearance(self, style: str) -> None:
-        """POST /wda/device/appearance - 设置外观 (withoutSession, light/dark)"""
-        body = {'style': style}
+    def set_device_appearance(self, name: str) -> None:
+        """POST /wda/device/appearance - 设置外观 (withoutSession, light/dark)
+        
+        Args:
+            name: 外观模式 "light" 或 "dark"（大小写不敏感）
+        """
+        body = {'name': name}
         self._post('/wda/device/appearance', body)
     
     def get_device_location(self) -> Dict[str, Any]:
@@ -548,11 +642,13 @@ class WDAClient:
         result = self._get(self._session_path('/wda/alert/buttons'))
         return result.get('value', [])
     
-    def alert_action(self, button_label: Optional[str] = None) -> None:
-        """POST /session/:id/wda/alertAction - 弹窗操作"""
-        body = {}
-        if button_label:
-            body['name'] = button_label
+    def alert_action(self, action: str) -> None:
+        """POST /session/:id/wda/alertAction - 设置默认弹窗行为
+        
+        Args:
+            action: 操作类型（如 "accept", "dismiss"）
+        """
+        body = {'action': action}
         self._post(self._session_path('/wda/alertAction'), body)
     
     def clear_alert(self) -> None:
@@ -661,9 +757,14 @@ class WDAClient:
     
     # ========== Reset App Auth ==========
     
-    def reset_app_auth(self) -> None:
-        """POST /session/:id/wda/resetAppAuth - 重置 App 授权"""
-        self._post(self._session_path('/wda/resetAppAuth'))
+    def reset_app_auth(self, resource: int) -> None:
+        """POST /session/:id/wda/resetAppAuth - 重置 App 授权
+        
+        Args:
+            resource: 资源标识符（数值型），参见 XCUIProtectedResource
+        """
+        body = {'resource': resource}
+        self._post(self._session_path('/wda/resetAppAuth'), body)
     
     # ========== IO HID Event ==========
     
