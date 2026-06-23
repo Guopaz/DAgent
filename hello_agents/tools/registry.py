@@ -287,5 +287,77 @@ class ToolRegistry:
         else:
             self.read_metadata_cache.clear()
 
+
+    def get_tool_schemas(self) -> list:
+        """构建所有工具的 JSON Schema 列表
+        
+        与 Agent._build_tool_schemas() 逻辑一致，但独立于 Agent 实例。
+        
+        Returns:
+            list: 工具 schema 列表，格式为 [{"type": "function", "function": {...}}]
+        """
+        schemas = []
+        
+        # 处理 Tool 对象
+        for tool in self._tools.values():
+            try:
+                params = tool.get_parameters()
+            except Exception:
+                params = []
+            
+            properties = {}
+            required = []
+            
+            for param in params:
+                param_type = (param.type or "string").lower()
+                if param_type not in {"string", "number", "integer", "boolean", "array", "object"}:
+                    param_type = "string"
+                
+                properties[param.name] = {
+                    "type": param_type,
+                    "description": param.description or "",
+                }
+                if param.default is not None:
+                    properties[param.name]["default"] = param.default
+                if getattr(param, "required", True):
+                    required.append(param.name)
+            
+            schema = {
+                "type": "function",
+                "function": {
+                    "name": tool.name,
+                    "description": tool.description or "",
+                    "parameters": {
+                        "type": "object",
+                        "properties": properties,
+                    }
+                }
+            }
+            if required:
+                schema["function"]["parameters"]["required"] = required
+            schemas.append(schema)
+        
+        # 处理函数工具
+        for name, func in self._functions.items():
+            schemas.append({
+                "type": "function",
+                "function": {
+                    "name": name,
+                    "description": getattr(func, "__doc__", "") or "",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "input": {
+                                "type": "string",
+                                "description": "输入文本"
+                            }
+                        },
+                        "required": ["input"]
+                    }
+                }
+            })
+        
+        return schemas
+
 # 全局工具注册表
 global_registry = ToolRegistry()

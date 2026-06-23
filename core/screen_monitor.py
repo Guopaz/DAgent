@@ -335,3 +335,69 @@ class ScreenMonitor:
     def _extract_element_names(self, xml: str) -> set:
         """从 XML 提取所有元素 name 集合（用于 diff）"""
         return set(re.findall(r'name="([^"]+)"', xml))
+
+    # =========================================================================
+    # 新增 API：用于工作流节点
+    # =========================================================================
+
+    def has_changed(self) -> bool:
+        """检测屏幕是否发生变化（对比前后帧 XML）
+
+        Returns:
+            True 表示屏幕已变化，False 表示未变化
+        """
+        if not self._previous_xml:
+            return False
+        return self._current_xml != self._previous_xml
+
+    def detect_alert(self) -> Optional[dict]:
+        """检测当前屏幕是否有弹窗（Alert）
+
+        Returns:
+            弹窗信息字典 {"title": "...", "type": "system|permission"} 或 None
+        """
+        if not self._current_xml:
+            return None
+
+        try:
+            root = ET.fromstring(self._current_xml)
+            alerts = root.findall('.//*[@type="XCUIElementTypeAlert"]')
+            if alerts:
+                alert = alerts[0]
+                title = alert.get("name", "未命名弹窗")
+                # 判断是否为权限弹窗
+                alert_type = "permission" if "允许" in title or "允许" in self._current_xml else "system"
+                return {"title": title, "type": alert_type}
+        except ET.ParseError:
+            pass
+        return None
+
+    def detect_keyboard(self) -> bool:
+        """检测当前屏幕是否有键盘
+
+        Returns:
+            True 表示键盘可见，False 表示不可见
+        """
+        if not self._current_xml:
+            return False
+
+        keyboard_patterns = [
+            'type="XCUIElementTypeKeyboard"',
+            'type="XCUIElementTypeKey"',
+        ]
+        return any(pattern in self._current_xml for pattern in keyboard_patterns)
+
+    def is_loading(self) -> bool:
+        """检测当前屏幕是否有加载状态（ActivityIndicator）
+
+        Returns:
+            True 表示正在加载，False 表示已加载完成
+        """
+        if not self._current_xml:
+            return False
+
+        loading_patterns = [
+            'type="XCUIElementTypeActivityIndicator"',
+            'type="XCUIElementTypeProgressIndicator"',
+        ]
+        return any(pattern in self._current_xml for pattern in loading_patterns)
