@@ -8,7 +8,9 @@
 """
 
 import json
+import re
 from typing import Any, Dict, List, Optional
+from .workflow_contexts import DeviceContext, TaskContext, LLMContext
 
 from .workflow_engine import (
     NodeResult,
@@ -71,7 +73,7 @@ class InitRoutine:
     迁移自：iOSAgent._on_loop_start（screen_monitor.reset + refresh）
     """
 
-    def execute(self, device_ctx) -> RoutineResult:
+    def execute(self, device_ctx: DeviceContext) -> RoutineResult:
         device_ctx.screen_monitor.reset()
         device_ctx.screen_monitor.refresh()
         return RoutineResult(status="success", data={
@@ -89,7 +91,7 @@ class CleanupRoutine:
     新增节点：将弹窗/键盘处理从 LLM 判断改为确定性前置处理。
     """
 
-    def execute(self, device_ctx) -> RoutineResult:
+    def execute(self, device_ctx: DeviceContext) -> RoutineResult:
         results = []
 
         # 1. 检测并关闭系统弹窗（Alert）
@@ -173,7 +175,7 @@ class PlanReasoning:
         },
     }
 
-    def execute(self, llm_ctx, device_ctx, task_ctx) -> ReasoningResult:
+    def execute(self, llm_ctx: LLMContext, device_ctx: DeviceContext, task_ctx: TaskContext) -> ReasoningResult:
         current_screen = device_ctx.screen_monitor.get_summary()
 
         # 获取可用工具名称列表
@@ -250,7 +252,7 @@ class RefreshRoutine:
     迁移自：_after_tool_execution 中的屏幕刷新 + _before_llm_call 中的状态注入
     """
 
-    def execute(self, device_ctx, llm_ctx) -> RoutineResult:
+    def execute(self, device_ctx: DeviceContext, llm_ctx: LLMContext) -> RoutineResult:
         device_ctx.screen_monitor.refresh()
 
         # 注入到消息上下文
@@ -275,7 +277,7 @@ class PreCheckRoutine:
     新增节点：将弹窗/键盘检测从 LLM 判断改为确定性前置处理。
     """
 
-    def execute(self, device_ctx, task_ctx) -> RoutineResult:
+    def execute(self, device_ctx: DeviceContext, task_ctx: TaskContext) -> RoutineResult:
         actions_taken = []
 
         # 1. 检测弹窗
@@ -338,7 +340,7 @@ class DecideReasoning:
     def __init__(self, tool_filter: Optional[StepToolFilter] = None):
         self.tool_filter = tool_filter
 
-    def execute(self, llm_ctx, task_ctx, device_ctx) -> ReasoningResult:
+    def execute(self, llm_ctx: LLMContext, task_ctx: TaskContext, device_ctx: DeviceContext) -> ReasoningResult:
         current_step = task_ctx.get_current_step()
         current_screen = device_ctx.screen_monitor.get_summary()
 
@@ -356,15 +358,44 @@ class DecideReasoning:
         else:
             step_desc = "（无当前步骤信息，请根据任务目标自行判断）"
 
-        prompt = (
-            f"## 当前任务\n{task_ctx.task}\n\n"
-            f"## 操作计划\n{task_ctx.format_plan_progress()}\n\n"
-            f"## 当前步骤\n{step_desc}\n\n"
-            f"## 当前屏幕\n{current_screen}\n\n"
+        # 构建提示，如果有恢复建议则包含
+        # 获取最近 3 步的执行历史
+        recent_history = ""
+        if task_ctx.all_step_results:
+            history_lines = []
+            for i, result in enumerate(task_ctx.all_step_results[-3:], 1):
+                tool = result.get("tool_name", "?")
+                args = result.get("arguments", {})
+                success = "✓" if result.get("success") else "✗"
+                output_preview = str(result.get("output", ""))[:100]
+                history_lines.append(f"  {i}. {tool}({args}) → {success} {output_preview}")
+            recent_history = "\n".join(history_lines)
+        
+        prompt_parts = [
+            f"## 当前任务\n{task_ctx.task}\n\n",
+            f"## 操作计划\n{task_ctx.format_plan_progress()}\n\n",
+            f"## 当前步骤\n{step_desc}\n\n",
+            f"## 当前屏幕\n{current_screen}\n\n",
+        ]
+        
+        # 添加执行历史
+        if recent_history:
+            prompt_parts.append(f"## 最近执行历史\n{recent_history}\n\n")
+        
+        # 如果有恢复建议，添加到提示中
+        if task_ctx.recovery_suggestion:
+            prompt_parts.append(f"## 恢复建议（请优先考虑）\n{task_ctx.recovery_suggestion}\n\n")
+            # 使用后清除，避免重复使用
+            task_ctx.recovery_suggestion = None
+        
+        prompt_parts.append(
             "请决定本步的具体操作。如果计划中的步骤在当前屏幕上无法执行，"
             "请说明原因并调整操作策略。\n"
-            "如果当前步骤已完成，可以执行下一步操作。"
+            "如果当前步骤已完成，可以执行下一步操作。\n"
+            "注意：避免重复执行相同的操作，根据执行历史调整策略。"
         )
+        
+        prompt = "".join(prompt_parts)
 
         messages = llm_ctx.messages + [{"role": "user", "content": prompt}]
         response = llm_ctx.llm.invoke_with_tools(
@@ -415,7 +446,7 @@ class ExecuteAction:
     支持批量执行：当 DecideReasoning 返回多个操作时，按序执行。
     """
 
-    def execute(self, task_ctx, device_ctx) -> ActionResult:
+    def execute(self, task_ctx: TaskContext, device_ctx: DeviceContext) -> ActionResult:
         operations = task_ctx.current_operation
         if not operations:
             return ActionResult(status="executed", data={"results": []})
@@ -479,15 +510,21 @@ class VerifyCheckpoint:
     """
 
     DETERMINISTIC_CHECKS = {
+        # 动作类工具：需要验证屏幕变化
         "tap_element":              "check_element_disappeared_or_page_changed",
         "input_text":               "check_input_field_has_value",
         "go_back":                  "check_page_changed",
         "scroll_to_find_and_tap":   "check_element_tapped_or_page_changed",
         "handle_alert":             "check_alert_dismissed",
         "restart_app":              "check_app_relaunched",
+        "switch_tab_bar":           "check_page_changed",  # 切换 Tab 应该改变屏幕
+        # 观察类工具：成功返回数据即可，无需验证屏幕变化
+        "get_tab_bar":              "check_success_return",
+        "observe_screen":           "check_success_return",
+        "inspect_element":          "check_success_return",
     }
 
-    def execute(self, task_ctx, device_ctx, llm_ctx) -> CheckpointResult:
+    def execute(self, task_ctx: TaskContext, device_ctx: DeviceContext, llm_ctx: LLMContext) -> CheckpointResult:
         current_step = task_ctx.get_current_step()
         step_results = task_ctx.step_results
 
@@ -516,6 +553,9 @@ class VerifyCheckpoint:
         # ---- 阶段 3：预期屏幕验证（轻量 LLM 调用）----
         expected_screen = current_step.get("expected_screen") if current_step else None
         if expected_screen:
+            # 只要有预期屏幕描述，就必须进行语义验证
+            # 如果 LLM 调用了观察工具（如 get_tab_bar list），屏幕不会改变，语义验证会失败
+            # 这会触发 RecoveryReasoning，让 LLM 重新选择正确的操作
             current_screen = device_ctx.screen_monitor.get_summary()
             match = self._semantic_check(llm_ctx, expected_screen, current_screen, task_ctx)
             if not match:
@@ -540,7 +580,7 @@ class VerifyCheckpoint:
             print(f"  ➡️ 进入步骤 {current.get('id', '?')}: {current.get('description', '?')}")
         return CheckpointResult(status="passed")
 
-    def _deterministic_check(self, method: str, device_ctx, result: dict) -> bool:
+    def _deterministic_check(self, method: str, device_ctx: DeviceContext, result: dict) -> bool:
         """确定性验证：基于屏幕 diff、元素存在性等客观条件判断"""
         screen = device_ctx.screen_monitor
         if method == "check_page_changed":
@@ -555,9 +595,11 @@ class VerifyCheckpoint:
             return True  # 输入操作通常可靠
         elif method == "check_app_relaunched":
             return True  # 重启操作通常可靠
+        elif method == "check_success_return":
+            return True  # 观察类工具成功返回即通过
         return True
 
-    def _semantic_check(self, llm_ctx, expected: str, current: str, task_ctx) -> bool:
+    def _semantic_check(self, llm_ctx: LLMContext, expected: str, current: str, task_ctx: TaskContext) -> bool:
         """语义验证：使用轻量 LLM 调用对比预期与实际屏幕"""
         prompt = (
             "你是一个 iOS 自动化验证专家。请判断当前屏幕状态是否与预期大致匹配。\n\n"
@@ -596,7 +638,7 @@ class RecoveryReasoning:
     MAX_TOTAL_RECOVERIES = 10
     REPLAN_THRESHOLD = 3  # 连续恢复次数触发重评估
 
-    def execute(self, llm_ctx, task_ctx, device_ctx) -> ReasoningResult:
+    def execute(self, llm_ctx: LLMContext, task_ctx: TaskContext, device_ctx: DeviceContext) -> ReasoningResult:
         current_step = task_ctx.get_current_step()
         retry_count = task_ctx.consecutive_recoveries
 
@@ -699,9 +741,14 @@ class RecoveryReasoning:
         if action == "abort":
             task_ctx.status = "aborted"
 
+
+        # 保存恢复建议到 task_ctx，供 DecideReasoning 使用
+        if decision.get("alternative_approach"):
+            task_ctx.recovery_suggestion = decision["alternative_approach"]
+
         return ReasoningResult(status=action, data=decision)
 
-    def _replan(self, llm_ctx, task_ctx, device_ctx) -> ReasoningResult:
+    def _replan(self, llm_ctx: LLMContext, task_ctx: TaskContext, device_ctx: DeviceContext) -> ReasoningResult:
         """触发计划重评估：调用 PlanReasoning 重新生成剩余步骤"""
         planner = PlanReasoning()
         current_screen = device_ctx.screen_monitor.get_summary()
@@ -737,7 +784,7 @@ class RecoveryReasoning:
 class SummaryRoutine:
     """任务总结：生成结构化的执行报告"""
 
-    def execute(self, task_ctx) -> RoutineResult:
+    def execute(self, task_ctx: TaskContext) -> RoutineResult:
         total_steps = len(task_ctx.plan.get("steps", [])) if task_ctx.plan else 0
 
         report = {

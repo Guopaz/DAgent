@@ -8,6 +8,10 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Dict, List, Optional, TYPE_CHECKING
+from wda_client import WDAClient
+from core.screen_monitor import ScreenMonitor
+from core.context_manager import MessageContextManager
+from hello_agents import HelloAgentsLLM
 
 if TYPE_CHECKING:
     from hello_agents.tools.registry import ToolRegistry
@@ -26,8 +30,8 @@ class DeviceContext:
     - 持有 ScreenMonitor 实例
     - 提供设备级操作的快捷入口
     """
-    wda: Any = None           # WDAClient
-    screen_monitor: Any = None  # ScreenMonitor
+    wda: WDAClient = None 
+    screen_monitor: ScreenMonitor = None
 
 
 # ---------------------------------------------------------------------------
@@ -70,6 +74,9 @@ class TaskContext:
 
     # 当前操作（由 DecideReasoning 写入，ExecuteAction 读取）
     current_operation: Optional[Any] = None
+    
+    # 恢复建议（由 RecoveryReasoning 写入，DecideReasoning 读取）
+    recovery_suggestion: Optional[str] = None
 
     # 最近一次失败原因（由 VerifyCheckpoint 写入，RecoveryReasoning 读取）
     last_failure_reason: str = ""
@@ -187,6 +194,6 @@ class LLMContext:
     - 管理消息历史
     - 持有 MessageContextManager（屏幕状态注入）
     """
-    llm: Any = None               # HelloAgentsLLM
+    llm: HelloAgentsLLM = NotImplemented
     messages: List[dict] = field(default_factory=list)
-    context_manager: Any = None   # MessageContextManager
+    context_manager: MessageContextManager = None

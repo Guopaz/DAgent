@@ -6,6 +6,7 @@ OBSERVATION_TOOLS = {
     "inspect_element",
     "get_device_summary",
     "check_app_status",
+    "get_tab_bar",  # 只读查询
 }
 
 # 动作类工具：会改变屏幕状态，执行后需要自动刷新
@@ -25,6 +26,7 @@ ACTION_TOOLS = {
     "dismiss_keyboard_if_present",
     "wait_seconds",
     "tap_keyboard_return",
+    "switch_tab_bar",  # 切换 Tab 会改变屏幕
     "wda_call",  # 通用 WDA 调用，大多数操作会改变屏幕状态
 }
 
@@ -32,7 +34,6 @@ ACTION_TOOLS = {
 # key: 工具名, value: (参数名, 动作值集合)
 CONDITIONAL_ACTION_TOOLS = {
     "handle_alert": ("action", {"accept", "dismiss", "custom"}),
-    "get_tab_bar": ("mode", {"switch"}),
 }
 
 

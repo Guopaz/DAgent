@@ -424,36 +424,12 @@ class TapByCoordinate(WDABaseTool):
             return self._fail(f"坐标点击失败 ({params['x']}, {params['y']}): {exc}")
 
 
-class GetTabBar(WDABaseTool):
-    """定位当前页面底部 TabBar，列出 Tab 或切换 Tab。"""
+# 模块级共享缓存，供 GetTabBar 和 SwitchTabBar 共用
+_tab_bar_cache = None
 
-    def __init__(self, wda):
-        super().__init__(
-            wda=wda,
-            name="get_tab_bar",
-            description=(
-                "定位当前页面底部 TabBar，列出所有 Tab 或切换 Tab。\n"
-                "- action='list'（默认）：返回结构化 Tab 列表（索引、名称、位置）\n"
-                "- action='switch'：切换到指定 Tab（按 index 或 tab_name）\n"
-                "- 纯图标 Tab 仍返回索引，支持按位置点击\n"
-                "- 不受 observe_screen XML 截断影响（精准 XPath 定位底部）\n"
-                "使用场景：多 Tab App（微信、淘宝、Boss直聘等）的导航\n"
-                "示例：get_tab_bar(action='list') → 列出所有 Tab\n"
-                "示例：get_tab_bar(action='switch', index=4) → 切换到第 5 个 Tab\n"
-                "示例：get_tab_bar(action='switch', tab_name='我的') → 按名称切换"
-            ),
-        )
-        self._cached = None  # 缓存: {items, tabs, selected_idx, selected_name}
 
-    def get_parameters(self) -> List[ToolParameter]:
-        return [
-            ToolParameter(name="action", type="string",
-                description="'list'（默认）/ 'switch'（切换）", required=False, default="list"),
-            ToolParameter(name="index", type="integer",
-                description="action='switch' 时按索引切换（0-based）", required=False),
-            ToolParameter(name="tab_name", type="string",
-                description="action='switch' 时按名称模糊匹配（不区分大小写）", required=False),
-        ]
+class _TabBarBase(WDABaseTool):
+    """TabBar 工具的共享基类，封装辅助方法和缓存逻辑。"""
 
     def _find_tabbar(self) -> str | None:
         bars = self.wda.find_elements("class name", "XCUIElementTypeTabBar")
@@ -461,13 +437,11 @@ class GetTabBar(WDABaseTool):
 
     def _get_tab_items(self, tabbar_id: str) -> list[tuple[str, str]]:
         """遍历 TabBar 所有子元素，找出 label 不为空的元素并去重。"""
-        # 查找 TabBar 下所有子元素
         try:
             all_children = self.wda.find_elements_from_element(tabbar_id, "xpath", ".//*")
         except Exception:
             return []
 
-        # 收集 label 不为空的元素，按出现顺序去重
         seen_labels: set[str] = set()
         items: list[tuple[str, str]] = []
 
@@ -476,12 +450,10 @@ class GetTabBar(WDABaseTool):
             if not raw_label:
                 continue
 
-            # 处理复合标签: "招人, SPTabBar_Boss_zhaoren" → "招人"
             text = raw_label.split(",")[0].strip()
             if not text or text.isdigit():
                 continue
 
-            # 去重
             if text in seen_labels:
                 continue
             seen_labels.add(text)
@@ -521,48 +493,95 @@ class GetTabBar(WDABaseTool):
 
     def _discover(self):
         """发现 TabBar 并缓存结果（idempotent）。"""
-        if self._cached is not None:
-            return  # 已有缓存
+        global _tab_bar_cache
+        if _tab_bar_cache is not None:
+            return
         tabbar_id = self._find_tabbar()
         if not tabbar_id:
-            self._cached = False  # 标记为无 TabBar
+            _tab_bar_cache = False
             return
         items = self._get_tab_items(tabbar_id)
         if not items:
-            self._cached = False
+            _tab_bar_cache = False
             return
         tabs, sel_idx, sel_name = self._build_tab_info(items)
-        self._cached = {"element_ids": [eid for eid, _ in items],
-                        "tabs": tabs,
-                        "selected_index": sel_idx,
-                        "selected_name": sel_name}
+        _tab_bar_cache = {"element_ids": [eid for eid, _ in items],
+                          "tabs": tabs,
+                          "selected_index": sel_idx,
+                          "selected_name": sel_name}
+
+
+class GetTabBar(_TabBarBase):
+    """获取底部 TabBar 的所有标签信息（只读）。"""
+
+    def __init__(self, wda):
+        super().__init__(
+            wda=wda,
+            name="get_tab_bar",
+            description=(
+                "获取底部 TabBar 的所有标签信息，返回结构化 Tab 列表（索引、名称、当前选中）。"
+                "这是一个只读操作，不会切换 Tab。"
+                "使用场景：先调用此工具了解 Tab 结构，再用 switch_tab_bar 切换。"
+                "示例：get_tab_bar() → 列出所有 Tab"
+            ),
+        )
+
+    def get_parameters(self) -> List[ToolParameter]:
+        return []
 
     def run(self, params: dict) -> ToolResponse:
-        action = params.get("action", "list")
-        index = params.get("index")
-        tab_name = params.get("tab_name")
-
-        if action == "switch":
-            if index is not None and tab_name is not None:
-                return self._fail("请只提供 index 或 tab_name 之一")
-            if index is None and tab_name is None:
-                return self._fail("action='switch' 时请提供 index 或 tab_name")
-
         self._discover()
-        if self._cached is None or self._cached is False:
+        if _tab_bar_cache is None or _tab_bar_cache is False:
             return self._ok(str({"found": False, "tab_count": 0, "selected_index": -1,
                 "selected_name": "", "tabs": [], "reason": "当前页面未检测到 TabBar 或无法提取标签"}),
                 {"found": False, "tab_count": 0, "selected_index": -1, "selected_name": "", "tabs": [],
                  "reason": "当前页面未检测到 TabBar 或无法提取标签"})
 
-        c = self._cached
-        if action == "list":
-            data = {"found": True, "tab_count": len(c["tabs"]),
-                    "selected_index": c["selected_index"], "selected_name": c["selected_name"],
-                    "tabs": c["tabs"]}
-            return self._ok(str(data), data)
+        c = _tab_bar_cache
+        data = {"found": True, "tab_count": len(c["tabs"]),
+                "selected_index": c["selected_index"], "selected_name": c["selected_name"],
+                "tabs": c["tabs"]}
+        return self._ok(str(data), data)
 
-        # action="switch"
+
+class SwitchTabBar(_TabBarBase):
+    """切换到底部 TabBar 的指定标签（写操作）。"""
+
+    def __init__(self, wda):
+        super().__init__(
+            wda=wda,
+            name="switch_tab_bar",
+            description=(
+                "切换到底部 TabBar 的指定标签。按 index（索引）或 tab_name（名称）切换。"
+                "通常先调用 get_tab_bar() 获取 Tab 列表，再用此工具切换。"
+                "示例：switch_tab_bar(index=3) → 切换到第 4 个 Tab"
+                "示例：switch_tab_bar(tab_name='我的') → 按名称切换"
+            ),
+        )
+
+    def get_parameters(self) -> List[ToolParameter]:
+        return [
+            ToolParameter(name="index", type="integer",
+                description="按索引切换（0-based）", required=False),
+            ToolParameter(name="tab_name", type="string",
+                description="按名称模糊匹配切换（不区分大小写）", required=False),
+        ]
+
+    def run(self, params: dict) -> ToolResponse:
+        global _tab_bar_cache
+        index = params.get("index")
+        tab_name = params.get("tab_name")
+
+        if index is not None and tab_name is not None:
+            return self._fail("请只提供 index 或 tab_name 之一")
+        if index is None and tab_name is None:
+            return self._fail("请提供 index 或 tab_name")
+
+        self._discover()
+        if _tab_bar_cache is None or _tab_bar_cache is False:
+            return self._fail("当前页面未检测到 TabBar 或无法提取标签")
+
+        c = _tab_bar_cache
         target_idx = None
         elem_to_click = None
         if tab_name is not None:
@@ -591,8 +610,7 @@ class GetTabBar(WDABaseTool):
         try:
             self.wda.click_element(elem_to_click)
             self.wda.wait(0.5)
-            # 切换后清缓存，下次 list 会重新发现
-            self._cached = None
+            _tab_bar_cache = None
             return self._ok(f"\u2705 已切换到 Tab [{target_idx}] {c['tabs'][target_idx]['screen_name']}")
         except Exception as exc:
             return self._fail(f"切换 Tab [{target_idx}] 失败: {exc}")
@@ -702,5 +720,6 @@ def create_interaction_tools(wda) -> list[WDABaseTool]:
         LongPressByName(wda),
         TapByCoordinate(wda),
         GetTabBar(wda),
+        SwitchTabBar(wda),
         TapKeyboardReturn(wda),
     ]
