@@ -466,14 +466,11 @@ class AgentLoop:
             "round_index": round_index,
             "timestamp": time.time(),
         }
-        latest = self._task_path("snapshots/latest.json")
-        latest.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
         if round_index:
             round_path = self._task_path(f"snapshots/round_{round_index:04d}.json")
             round_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
         if checkpoint:
-            checkpoint_path = self._task_path("snapshots/checkpoint.json")
-            checkpoint_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+            self._task_path("snapshots/checkpoint.json").write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
     def _calculate_recovery_success_rate(self, task: Task) -> float:
         attempts = task.metrics.recovery_count
@@ -578,11 +575,9 @@ class AgentLoop:
 
     def _save_state_report(self, task: Task, workflow: Workflow, last_observation: Optional[Observation]) -> None:
         payload = self._build_state_payload(task, workflow, last_observation)
-        self._task_path("state/state.json").write_text(json.dumps(payload["agent_state"], ensure_ascii=False, indent=2), encoding="utf-8")
         self._task_path("state/stats.json").write_text(json.dumps(payload["agent_stats"], ensure_ascii=False, indent=2), encoding="utf-8")
         self._task_path("state/health.json").write_text(json.dumps(payload["health"], ensure_ascii=False, indent=2), encoding="utf-8")
         self._task_path("state/state_report.txt").write_text(self._format_state_report(task, payload), encoding="utf-8")
-        self._task_path("state_report.txt").write_text(self._format_state_report(task, payload), encoding="utf-8")
 
     def _save_report(self, task: Task) -> None:
         data = {
