@@ -24,7 +24,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 from xml.etree import ElementTree as ET
-from llm_client import LLMClient
+from agent.llm_client import LLMClient
 
 from agent.models import *
 from agent.helpers import _extract_json, _extract_search_keyword, _extract_after_keywords, _goal_tokens, _loose_contains, _safe_asdict, visible_element_details, find_best_element, first_element, _progress_genuinely_satisfies
