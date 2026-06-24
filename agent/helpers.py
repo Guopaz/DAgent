@@ -106,6 +106,14 @@ def infer_success_criteria(goal: str) -> List[str]:
     m = re.search(r"投递前([一二三四五六七八九十\d]+)个", goal)
     if m:
         criteria.append(f"已成功投递{m.group(1)}个不同目标")
+    # 处理"发送"类任务：提取要发送的消息内容
+    send_match = re.search(r"发送\s*([^,，。；;]+)", goal)
+    if send_match:
+        message = send_match.group(1).strip()
+        # 去掉后续动作描述
+        message = re.split(r"并|后|然后|，|,", message)[0].strip()
+        if message:
+            criteria.append(f"已发送消息{message}")
     if not criteria:
         criteria.append(goal)
     return criteria
@@ -206,3 +214,46 @@ def _compact_observation(obs: Observation, include_all_elements: bool = True) ->
     }
 
 
+
+def _progress_genuinely_satisfies(progress_objectives: list, criteria: list) -> bool:
+    """验证进度目标是否真正满足成功标准，而非仅靠文本子串匹配。
+
+    核心原则：进度条目描述的是"正在做"还是"已完成"，必须有语义区分。
+    例如"正在查找福宝有限公司"不等于"已进入福宝有限公司的对话"。
+    """
+    if not progress_objectives or not criteria:
+        return False
+
+    # 动作完成标记词：出现在 progress 条目中说明该步骤已完成
+    completion_markers = ["已", "完成", "成功", "切换了", "进入了", "打开了", "点击了", "发送了"]
+    # 动作进行中标记词：说明该步骤还在执行中，尚未完成
+    in_progress_markers = ["正在", "查找", "搜索中", "尝试", "寻找", "滚动"]
+
+    for criterion in criteria:
+        criterion_tokens = _goal_tokens(criterion) or [criterion]
+        found = False
+        for obj in progress_objectives:
+            # 检查此 progress 条目是否声称完成了该标准
+            obj_has_completion = any(m in obj for m in completion_markers)
+            obj_has_in_progress = any(m in obj for m in in_progress_markers)
+
+            # 如果 progress 条目只是"正在查找X"，不能说"已进入X"已满足
+            if obj_has_in_progress and not obj_has_completion:
+                continue
+
+            # 检查 progress 条目是否包含成功标准的关键 token
+            if any(t and t in obj for t in criterion_tokens):
+                # 额外检查：progress 条目描述的动作是否与成功标准语义一致
+                # 例如 criterion 是"已进入福宝有限公司的对话"，progress 是"切换到消息tab"
+                # 虽然可能碰巧包含"福宝有限公司"文本，但"切换到消息tab"和"进入对话"是不同的动作
+                criterion_verbs = [v for v in ["进入", "点击", "发送", "输入", "搜索", "打开", "投递", "提交"] if v in criterion]
+                progress_verbs = [v for v in ["进入", "点击", "发送", "输入", "搜索", "打开", "投递", "提交", "切换"] if v in obj]
+                # 如果 criterion 要求特定动作（如"进入"），progress 必须包含相同或兼容的动作
+                if criterion_verbs and not progress_verbs:
+                    continue
+                found = True
+                break
+
+        if not found:
+            return False
+    return True

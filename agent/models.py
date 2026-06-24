@@ -303,6 +303,7 @@ class NextDecision:
     expected_outcome: str = ""
     progress_update: List[str] = field(default_factory=list)
     validation_hint: str = ""
+    validation: Optional["LLMValidation"] = None  # LLM 对"上一步动作"的验证结果
     # LLM 在决策前对当前页面内容/状态的简短总结，用于日志展示。
     page_summary: str = ""
 
@@ -317,6 +318,14 @@ class ActionRecord:
     timestamp: float = field(default_factory=time.time)
     duration: float = 0.0
 
+
+
+@dataclass
+class LLMValidation:
+    """LLM 对"上一步动作"的验证结果"""
+    passed: bool
+    reason: str
+    observation_summary: str = ""
 
 @dataclass
 class ValidationResult:
@@ -449,3 +458,14 @@ class AgentStats:
         return self.successful_actions / self.total_actions if self.total_actions else 1.0
 
 
+
+
+@dataclass
+class ActionContext:
+    """上一步动作的上下文，用于 LLM 验证"""
+    action_type: str
+    action_target: str
+    action_value: str
+    page_before: str
+    expected_outcome: str
+    execution_result: str  # "success" | "failed" | "unknown"

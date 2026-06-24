@@ -79,9 +79,11 @@ class AgentLoop:
             last_active_at=time.time(),
         )
         self.agent_stats = AgentStats()
+        self.state_machine.reset()  # 重置状态机，确保从 INIT 状态开始
         self._write_event(task, "task_started", {"goal": task.goal, "params": task.params})
         self._save_state_report(task, workflow, last_observation=None)
         consecutive_failures = 0
+        last_action_context: Optional[ActionContext] = None
         round_index = 0
         last_observation: Optional[Observation] = None
 
@@ -143,14 +145,18 @@ class AgentLoop:
                     self.memory,
                     self.state_machine.state,
                 )
-                decision = self.planner.decide(context)
+                decision = self.planner.decide(context, last_action_context)
                 workflow.progress.last_decision = decision
                 self.agent_state.current_node = "planning"
                 self.agent_state.last_decision = decision
                 self.agent_stats.decision_rounds = max(self.agent_stats.decision_rounds, round_index)
+                # 先输出验证结果（如果有），再输出决策
+                if decision.validation:
+                    print(f"🏹 验证：{decision.validation.passed} - {decision.validation.reason}")
+
                 self._write_event(task, "decision", {"round": round_index, "decision": _safe_asdict(decision)})
                 if decision.page_summary:
-                    print(f"📄 页面总结：{decision.page_summary}")
+                    print(f"📄 页面：{decision.page_summary}")
                 print(f"🧭 决策：{decision.type.value} - {decision.reason}")
 
                 action_record: Optional[ActionRecord] = None
@@ -164,6 +170,7 @@ class AgentLoop:
                         workflow.goal,
                         progress=workflow.progress,
                         memory=self.memory,
+                        llm_validation=decision.validation,
                     )
                     self._write_event(task, "final_validation", {"round": round_index, "validation": _safe_asdict(validation)})
                     if validation.passed:
@@ -223,7 +230,7 @@ class AgentLoop:
                 target_desc = action.target
                 if action.element_id:
                     target_desc = f"{target_desc} [{action.element_id}]" if target_desc else action.element_id
-                print(f"⚙️ 执行：{action.type.value} target='{target_desc}' result={action_record.result.success}")
+                print(f"🕹️  执行：{action.type.value} target='{target_desc}' result={action_record.result.success}")
 
                 # 给页面一点反应时间，再重新观察。
                 self.perception.device.wait(0.8)
@@ -243,7 +250,7 @@ class AgentLoop:
                 })
 
                 self.state_machine.transition(AgentRunState.VALIDATING)
-                validation = self.validator.validate(decision, action_record, observation_before, observation_after, workflow.goal)
+                validation = self.validator.validate(decision, action_record, observation_before, observation_after, workflow.goal, llm_validation=decision.validation)
                 self.agent_state.current_node = "validating"
                 if validation.passed and action_record.result.success:
                     self.agent_stats.successful_actions += 1
@@ -251,10 +258,20 @@ class AgentLoop:
                     self.agent_stats.failed_actions += 1
                     self.agent_stats.failed_rounds += 1
                 self._write_event(task, "validation", {"round": round_index, "validation": _safe_asdict(validation)})
-                print(f"🧪 验证：{validation.passed} - {validation.message}")
-
+                # print(f"🧪 本轮验证：{validation.passed} - {validation.message}")
+                
                 if action_record:
                     self.memory.remember_action(action_record, validation)
+                
+                # 构建下一步的 ActionContext
+                last_action_context = ActionContext(
+                    action_type=action.type.value,
+                    action_target=action.target,
+                    action_value=action.value,
+                    page_before=observation_before.page_name,
+                    expected_outcome=decision.expected_outcome,
+                    execution_result="success" if action_record.result.success else "failed"
+                )
                 record = ProgressRecord(
                     round_index=round_index,
                     focus=workflow.progress.current_focus,

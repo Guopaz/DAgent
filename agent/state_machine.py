@@ -31,6 +31,10 @@ class StateMachine:
     def __init__(self):
         self.state = AgentRunState.INIT
 
+    def reset(self) -> None:
+        """重置状态机到初始状态，用于开始新任务"""
+        self.state = AgentRunState.INIT
+
     def transition(self, new_state: AgentRunState) -> None:
         allowed = self._allowed.get(self.state, set())
         if new_state not in allowed and self.state != new_state:

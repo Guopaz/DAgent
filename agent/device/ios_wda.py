@@ -134,7 +134,7 @@ class IOSWDADevice(Device):
             info = self.get_info()
             w, h = info.screen_resolution
             if w and h:
-                return self.swipe(5, h / 2, w * 0.45, h / 2).raw_response
+                return self.client.drag(1, h / 2, w * 0.8, h / 2, duration=0.1)
             raise RuntimeError("未找到返回按钮，且无法获取屏幕尺寸执行返回手势")
 
         return self._op("press_back", call, {})
