@@ -24,7 +24,7 @@ load_dotenv()
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
-from wda_client import WDAClient
+from ios.wda_client import WDAClient
 from agent import (
     AgentLoop,
     PerceptionLayer,
@@ -65,7 +65,7 @@ def create_agent(wda_url: str = "http://localhost:8100"):
 
     # 2. 初始化 LLM 客户端
     print("🧠 初始化 LLM 客户端...")
-    from llm_client import LLMClient
+    from agent.llm_client import LLMClient
     llm = LLMClient()
     print(f"✓ LLM 客户端已就绪")
 

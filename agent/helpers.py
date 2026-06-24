@@ -1,4 +1,16 @@
-"""自动从旧 agent.py 拆分生成；按职责维护。"""
+"""
+Agent 辅助函数集合。
+
+提供各模块共用的纯函数和工具方法：
+- 文本匹配：_loose_contains, _goal_tokens, _match_score — 模糊文本匹配和 token 提取
+- 语义验证：_progress_genuinely_satisfies — 区分"正在做"和"已完成"的进度验证
+- 元素查找：find_best_element, first_element — UI 元素匹配
+- 目标推断：infer_success_criteria — 从任务描述自动推断成功标准
+- 文本提取：_extract_search_keyword, _extract_after_keywords — 从目标中提取关键词
+- 序列化工具：_safe_asdict, _extract_json — 数据类和 JSON 转换
+- UI 工具：visible_element_details, element_detail_dict — 元素详情提取
+- 设备参数：_default_swipe_params — 默认滑动参数
+"""
 
 from __future__ import annotations
 
@@ -17,6 +29,7 @@ from xml.etree import ElementTree as ET
 
 from agent.models import *
 
+# 安全转换为 float，失败时返回默认值
 def _to_float(value: Any, default: float = 0.0) -> float:
     try:
         return float(value)
@@ -24,6 +37,7 @@ def _to_float(value: Any, default: float = 0.0) -> float:
         return default
 
 
+# 安全转换为 bool，支持字符串 "1"/"true"/"yes"
 def _to_bool(value: Any, default: bool = False) -> bool:
     if value is None:
         return default
@@ -32,6 +46,7 @@ def _to_bool(value: Any, default: bool = False) -> bool:
     return str(value).lower() in {"1", "true", "yes"}
 
 
+# 在元素列表中查找与目标最匹配的元素（按分数和面积排序）
 def find_best_element(elements: Iterable[UIElement], target: str, clickable_only: bool = False) -> Optional[UIElement]:
     target = (target or "").strip()
     candidates = [e for e in elements if e.visible and e.enabled and (not clickable_only or e.clickable)]
@@ -46,10 +61,12 @@ def find_best_element(elements: Iterable[UIElement], target: str, clickable_only
     return scored[0][1] if scored else None
 
 
+# 查找第一个匹配指定类型的可见且启用的元素
 def first_element(elements: Iterable[UIElement], types: set[ElementType]) -> Optional[UIElement]:
     return next((e for e in elements if e.visible and e.enabled and e.type in types), None)
 
 
+# 计算 UI 元素文本与目标文本的匹配分数
 def _match_score(text: str, target: str) -> float:
     text_l = (text or "").lower()
     target_l = (target or "").lower()
@@ -66,6 +83,7 @@ def _match_score(text: str, target: str) -> float:
     return hit / len(tokens) * 0.6
 
 
+# 从目标描述中提取关键词 token，过滤停用词
 def _goal_tokens(goal: str) -> List[str]:
     # 中文按常见动词/标点切分，英文按词切分；过滤过短和泛化词。
     raw = re.split(r"[\s,，。.!！?？、：:;；/\\]+|打开|启动|进入|点击|选择|搜索|查找|输入|投递|前三个|前3个", goal)
@@ -74,6 +92,7 @@ def _goal_tokens(goal: str) -> List[str]:
     return [t for t in tokens if t not in stop]
 
 
+# 提取指定关键词之后的内容（如"打开"之后的 App 名称）
 def _extract_after_keywords(text: str, keywords: List[str]) -> str:
     for kw in keywords:
         if kw in text:
@@ -83,6 +102,7 @@ def _extract_after_keywords(text: str, keywords: List[str]) -> str:
     return ""
 
 
+# 提取搜索/输入类任务中的关键词
 def _extract_search_keyword(goal: str) -> str:
     for pat in [r"搜索\s*([^,，。；;]+)", r"查找\s*([^,，。；;]+)", r"输入\s*([^,，。；;]+)"]:
         m = re.search(pat, goal)
@@ -94,6 +114,7 @@ def _extract_search_keyword(goal: str) -> str:
     return ""
 
 
+# 从任务描述自动推断成功标准（提取"进入"、"发送"、"搜索"等关键词后的内容）
 def infer_success_criteria(goal: str) -> List[str]:
     criteria: list[str] = []
     if "打开" in goal or "启动" in goal or "进入" in goal:
@@ -119,6 +140,7 @@ def infer_success_criteria(goal: str) -> List[str]:
     return criteria
 
 
+# 根据设备屏幕分辨率计算默认滑动参数（起止坐标、持续时间）
 def _default_swipe_params(info: DeviceInfo, up: bool = True) -> Dict[str, float]:
     w, h = info.screen_resolution
     w = w or 390
@@ -132,16 +154,19 @@ def _default_swipe_params(info: DeviceInfo, up: bool = True) -> Dict[str, float]
     }
 
 
+# 判断是否为导航返回类任务（包含"返回上一页"等关键词）
 def _is_navigation_back_goal(description: str, criteria: List[str]) -> bool:
     text = " ".join([description] + list(criteria))
     return any(k in text for k in ["返回上一页", "返回上一级", "回到上一页", "回上一页", "返回前一页"])
 
 
+# 检查文本是否包含目标标准的任意 token（模糊匹配）
 def _loose_contains(text: str, criterion: str) -> bool:
     tokens = _goal_tokens(criterion) or [criterion]
     return any(t and t in text for t in tokens)
 
 
+# 从 LLM 返回的文本中提取 JSON 对象（处理 markdown 代码块和多余文本）
 def _extract_json(content: str) -> Dict[str, Any]:
     content = content.strip()
     if content.startswith("```"):
@@ -156,6 +181,7 @@ def _extract_json(content: str) -> Dict[str, Any]:
         return json.loads(m.group(0))
 
 
+# 安全地将 dataclass 对象转换为字典，处理枚举、datetime 等特殊类型
 def _safe_asdict(obj: Any) -> Any:
     def convert(v: Any) -> Any:
         if isinstance(v, Enum):
@@ -177,6 +203,7 @@ def _safe_asdict(obj: Any) -> Any:
     return convert(obj)
 
 
+# 将单个 UIElement 转换为包含 name、center、bounds 的详情字典
 def element_detail_dict(element: UIElement) -> Dict[str, Any]:
     if hasattr(element, "detail_dict"):
         return element.detail_dict()
@@ -195,10 +222,12 @@ def element_detail_dict(element: UIElement) -> Dict[str, Any]:
     return data
 
 
+# 提取所有可见元素的详情字典，用于传递给 LLM 的 prompt
 def visible_element_details(elements: Iterable[UIElement]) -> List[Dict[str, Any]]:
     return [element_detail_dict(e) for e in elements if e.visible]
 
 
+# 压缩 Observation 对象用于报告存储，限制元素数量避免文件过大
 def _compact_observation(obs: Observation, include_all_elements: bool = True) -> Dict[str, Any]:
     visible_elements = [e for e in obs.elements if e.visible]
     elements = visible_elements if include_all_elements else visible_elements[:50]
@@ -215,6 +244,7 @@ def _compact_observation(obs: Observation, include_all_elements: bool = True) ->
 
 
 
+# 语义验证进度是否真正满足成功标准，区分"正在做"和"已完成"，避免文本子串匹配导致的幻觉
 def _progress_genuinely_satisfies(progress_objectives: list, criteria: list) -> bool:
     """验证进度目标是否真正满足成功标准，而非仅靠文本子串匹配。
 

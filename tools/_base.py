@@ -6,7 +6,7 @@ from typing import Any, Dict, List
 
 from hello_agents.tools import Tool, ToolParameter, ToolResponse, ToolStatus
 from hello_agents.tools.errors import ToolErrorCode
-from wda_client import WDAClient
+from ios.wda_client import WDAClient
 
 
 class WDABaseTool(Tool):

@@ -1,4 +1,14 @@
-"""自动从旧 agent.py 拆分生成；按职责维护。"""
+"""
+Agent 主循环（AgentLoop）。
+
+核心职责：编排 observe → decide → execute → validate 的完整任务执行流程。
+- run_task(): 任务主循环，每轮执行：观察 → 构建上下文 → 决策（含验证上一步）→ 执行 → 观察结果 → 验证 → 更新进度
+- _save_snapshot(): 保存任务快照（round_XXXX.json + checkpoint.json）
+- _save_state_report(): 保存状态报告（stats/health/state_report）
+- _save_report(): 任务结束后保存完整报告（report.json + summary.json）
+- _write_event(): 追加写入事件日志（events.jsonl）
+- _save_observation(): 保存每轮观察的 JSON 和原始 XML
+"""
 
 from __future__ import annotations
 
@@ -16,7 +26,7 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 from xml.etree import ElementTree as ET
 
 from agent.models import *
-from agent.device.factory import ensure_device
+from device_factory import ensure_device
 from agent.device.mock import MockDevice
 from agent.perception.layer import PerceptionLayer
 from agent.planner import Planner
@@ -29,6 +39,8 @@ from agent.workflow.workflow import Workflow
 from agent.workflow.workflow_engine import WorkflowEngine
 from agent.helpers import _compact_observation, _safe_asdict
 
+# AgentLoop: 主循环，编排 observe → decide → execute → validate 的完整流程
+# 管理任务生命周期、状态持久化、事件日志和报告生成
 class AgentLoop:
     def __init__(
         self,

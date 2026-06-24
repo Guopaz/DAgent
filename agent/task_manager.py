@@ -1,4 +1,10 @@
-"""自动从旧 agent.py 拆分生成；按职责维护。"""
+"""
+Agent 任务管理器（TaskManager）。
+
+核心职责：任务的创建和执行入口。
+- create_task(): 创建 Task 对象，支持设置目标、参数和优先级
+- run(): 将任务委托给 AgentLoop 执行
+"""
 
 from __future__ import annotations
 
@@ -18,6 +24,8 @@ from xml.etree import ElementTree as ET
 from agent.models import *
 from agent.loop import AgentLoop
 
+# TaskManager: 任务管理器，任务的创建和执行入口
+# 将任务委托给 AgentLoop 执行
 class TaskManager:
     def __init__(self, agent_loop: AgentLoop):
         self.agent_loop = agent_loop

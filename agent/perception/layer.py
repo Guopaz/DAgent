@@ -1,4 +1,12 @@
-"""自动从旧 agent.py 拆分生成；按职责维护。"""
+"""
+感知层（PerceptionLayer）。
+
+核心职责：封装设备交互，输出结构化的 Observation。
+- observe(): 调用设备获取截图和 UI 树，组装为 Observation 对象
+- _infer_page_name(): 从 UI 元素推断当前页面名称（优先导航栏，回退到首个文本元素）
+- _available_actions(): 根据当前页面元素类型推断可用动作（有按钮则可点击，有输入框则可输入等）
+- 内部使用 ChangeDetector 检测页面变化（新增/移除/修改的元素）
+"""
 
 from __future__ import annotations
 
@@ -16,9 +24,11 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 from xml.etree import ElementTree as ET
 
 from agent.models import *
-from agent.device.factory import ensure_device
+from device_factory import ensure_device
 from agent.perception.change_detector import ChangeDetector
 
+# PerceptionLayer: 感知层，封装设备交互，输出结构化的 Observation
+# 内部使用 ChangeDetector 检测页面变化
 class PerceptionLayer:
     def __init__(self, device: Any):
         self.device = ensure_device(device)

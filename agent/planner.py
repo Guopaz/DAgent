@@ -1,4 +1,14 @@
-"""自动从旧 agent.py 拆分生成；按职责维护。"""
+"""
+Agent 决策器（Planner）。
+
+核心职责：根据当前观察和任务进度，决定下一步动作。
+- decide(): 入口方法，按优先级依次检查设备状态、加载检测、任务完成、停滞检测，最后调用 LLM 或规则降级
+- _llm_decide(): LLM 决策路径，构建 prompt 包含上一步验证上下文，解析 JSON 输出
+- _heuristic_decide(): 规则降级路径，LLM 不可用时使用简单规则
+- _validate_by_rules(): 规则级验证回退，检查硬约束（页面跳转、输入值可见等）
+- _looks_done(): 判断任务是否已完成，使用 _progress_genuinely_satisfies 做语义验证
+- _detect_stagnation(): 停滞检测，连续滑动无效时提示切换策略
+"""
 
 from __future__ import annotations
 
@@ -19,6 +29,8 @@ from llm_client import LLMClient
 from agent.models import *
 from agent.helpers import _extract_json, _extract_search_keyword, _extract_after_keywords, _goal_tokens, _loose_contains, _safe_asdict, visible_element_details, find_best_element, first_element, _progress_genuinely_satisfies
 
+# Planner: 决策器，根据当前观察和进度决定下一步动作
+# 优先使用 LLM 决策，失败时回退到规则降级
 class Planner:
     """滚动式下一步决策器。优先使用 LLM，失败时使用规则降级。"""
 

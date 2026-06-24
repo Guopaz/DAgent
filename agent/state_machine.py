@@ -1,4 +1,11 @@
-"""自动从旧 agent.py 拆分生成；按职责维护。"""
+"""
+Agent 状态机（StateMachine）。
+
+核心职责：管理 Agent 运行时的状态转换合法性。
+- 定义允许的状态转换路径：INIT → OBSERVING → PLANNING → EXECUTING → VALIDATING → PROGRESS_UPDATED → OBSERVING（循环）
+- transition(): 执行状态转换，非法转换时抛出 RuntimeError
+- reset(): 重置到 INIT 状态，用于新任务启动时清理上一任务的状态
+"""
 
 from __future__ import annotations
 
@@ -17,6 +24,8 @@ from xml.etree import ElementTree as ET
 
 from agent.models import *
 
+# StateMachine: 状态机，管理 Agent 运行时状态转换的合法性
+# 非法转换时抛出 RuntimeError，支持 reset() 重置到新任务
 class StateMachine:
     _allowed = {
         AgentRunState.INIT: {AgentRunState.OBSERVING, AgentRunState.FAILED},

@@ -1,4 +1,12 @@
-"""自动从旧 agent.py 拆分生成；按职责维护。"""
+"""
+Agent 执行器（Executor）。
+
+核心职责：将 Planner 输出的抽象 Action 转换为具体的设备操作。
+- execute(): 根据 ActionType 调用对应的 Device 方法（click/swipe/input/back/home/wait）
+- 对 click 动作：优先使用 element_id 定位元素坐标，回退到语义匹配
+- 对 input 动作：先点击输入框聚焦，再调用设备输入文本
+- 对 swipe 动作：使用默认屏幕参数计算滑动起止点
+"""
 
 from __future__ import annotations
 
@@ -16,9 +24,11 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 from xml.etree import ElementTree as ET
 
 from agent.models import *
-from agent.device.factory import ensure_device
+from device_factory import ensure_device
 from agent.helpers import _default_swipe_params, _to_float, find_best_element, first_element
 
+# Executor: 执行器，将抽象 Action 转换为具体的设备操作
+# 根据 ActionType 调用对应的 Device 方法
 class Executor:
     def __init__(self, device: Any):
         self.device = ensure_device(device)

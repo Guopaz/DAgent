@@ -1,4 +1,11 @@
-"""自动从旧 agent.py 拆分生成；按职责维护。"""
+"""
+模拟设备实现（MockDevice）。
+
+用于离线单测，所有操作直接返回成功结果：
+- 不依赖真实设备和 WDA 连接
+- 可注入自定义 UIElement 列表用于测试
+- 默认屏幕分辨率 390x844（iPhone 14）
+"""
 
 from __future__ import annotations
 
@@ -16,8 +23,10 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 from xml.etree import ElementTree as ET
 
 from agent.models import *
-from agent.device.base import Device
+from agent.device.device import Device
 
+# MockDevice: 模拟设备，用于离线单测
+# 所有操作直接返回成功，可注入自定义 UIElement 列表
 class MockDevice(Device):
     """离线单测用 Mock 设备。"""
 

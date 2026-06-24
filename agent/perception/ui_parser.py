@@ -1,4 +1,10 @@
-"""自动从旧 agent.py 拆分生成；按职责维护。"""
+"""
+WDA XML 解析器。
+
+核心职责：将 WebDriverAgent 返回的 XML UI 树解析为 UIElement 列表。
+- parse_wda_xml(): 解析 XML 字符串，提取每个元素的类型、文本、位置、可交互性等属性
+- map_wda_type(): 将 WDA 的 XCUIElementType 映射为内部 ElementType 枚举
+"""
 
 from __future__ import annotations
 

@@ -5,10 +5,10 @@
 """
 
 from agent.models import *
-from agent.device.base import Device
-from agent.device.ios_wda import IOSWDADevice
+from agent.device.device import Device
+from ios.ios_device import IOSWDADevice
 from agent.device.mock import MockDevice
-from agent.device.factory import ensure_device
+from device_factory import ensure_device
 from agent.perception.ui_parser import parse_wda_xml, map_wda_type
 from agent.perception.change_detector import ChangeDetector
 from agent.perception.layer import PerceptionLayer

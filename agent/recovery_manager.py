@@ -1,4 +1,12 @@
-"""自动从旧 agent.py 拆分生成；按职责维护。"""
+"""
+Agent 恢复管理器（RecoveryManager）。
+
+核心职责：当动作执行失败或验证不通过时，决定恢复策略。
+- recover(): 根据失败次数递增恢复强度：
+  1. 前 3 次：等待 1 秒后重试（RETRY）
+  2. 第 4-5 次：按返回键后重新规划（REPLAN）
+  3. 超过 5 次：放弃任务（ABORT_TASK）
+"""
 
 from __future__ import annotations
 
@@ -16,8 +24,10 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 from xml.etree import ElementTree as ET
 
 from agent.models import *
-from agent.device.factory import ensure_device
+from device_factory import ensure_device
 
+# RecoveryManager: 恢复管理器，根据失败次数递增恢复强度
+# RETRY(前3次) → REPLAN(4-5次) → ABORT_TASK(超过5次)
 class RecoveryManager:
     def __init__(self, device: Any = None, wda: Any = None, max_retries: int = 3):
         self.device = ensure_device(device or wda) if (device or wda) is not None else None

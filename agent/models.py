@@ -1,4 +1,18 @@
-"""自动从旧 agent.py 拆分生成；按职责维护。"""
+"""
+Agent 数据模型定义文件。
+
+定义 Agent 系统中所有核心数据结构，分为以下几类：
+- 枚举类型：TaskStatus, DecisionType, ActionType, ElementType, AgentRunState 等
+- UI 模型：Rect, UIElement — WDA 解析后的 UI 元素
+- 设备模型：DeviceStatus, DeviceInfo, ScreenCapture, OperationResult
+- 观察模型：Observation, ObservationDiff — PerceptionLayer 的输出
+- 决策模型：Action, NextDecision — Planner 的输出
+- 验证模型：LLMValidation, ValidationResult, ActionContext — Validator 和 LLM 验证
+- 执行模型：ActionRecord, ProgressRecord — 单轮执行记录
+- 任务模型：Task, TaskGoal, TaskProgress, TaskMetrics — 任务定义与进度
+- 上下文模型：ExecutionContext — Planner 决策时的完整上下文
+- 状态模型：AgentState, AgentStats, ErrorInfo — 运行时状态与统计
+"""
 
 from __future__ import annotations
 
@@ -14,7 +28,14 @@ if TYPE_CHECKING:
     from agent.memory import Memory
 
 
+# 任务生命周期状态
 class TaskStatus(Enum):
+    """
+    任务定义。
+    
+    Agent 执行的最小工作单元，包含目标描述、成功标准、约束条件和执行参数。
+    通过 WorkflowEngine 转换为 Workflow 进行实际执行。
+    """
     CREATED = "created"
     RUNNING = "running"
     PAUSED = "paused"
@@ -25,14 +46,28 @@ class TaskStatus(Enum):
     TIMED_OUT = "timed_out"
 
 
+# 任务优先级
 class TaskPriority(Enum):
+    """
+    任务定义。
+    
+    Agent 执行的最小工作单元，包含目标描述、成功标准、约束条件和执行参数。
+    通过 WorkflowEngine 转换为 Workflow 进行实际执行。
+    """
     LOW = "low"
     NORMAL = "normal"
     HIGH = "high"
     CRITICAL = "critical"
 
 
+# Planner 决策类型
 class DecisionType(Enum):
+    """
+    Planner 的决策输出。
+    
+    包含决策类型、理由、具体动作（如果有）、验证提示和进度更新。
+    由 Planner 生成，Executor 执行，Validator 验证。
+    """
     ACTION = "action"
     WAIT = "wait"
     COMPLETE = "complete"
@@ -40,6 +75,7 @@ class DecisionType(Enum):
     ABORT = "abort"
 
 
+# 可执行的动作类型
 class ActionType(Enum):
     CLICK = "click"
     INPUT = "input"
@@ -51,6 +87,7 @@ class ActionType(Enum):
     WAIT = "wait"
 
 
+# WDA UI 元素类型映射
 class ElementType(Enum):
     BUTTON = "button"
     TEXT_FIELD = "text_field"
@@ -69,6 +106,7 @@ class ElementType(Enum):
     OTHER = "other"
 
 
+# 设备连接状态
 class ConnectionState(Enum):
     CONNECTED = "connected"
     DISCONNECTED = "disconnected"
@@ -76,6 +114,7 @@ class ConnectionState(Enum):
     UNKNOWN = "unknown"
 
 
+# 设备平台类型
 class PlatformType(Enum):
     IOS = "ios"
     ANDROID = "android"
@@ -83,6 +122,7 @@ class PlatformType(Enum):
     OTHER = "other"
 
 
+# Agent 主循环状态机节点
 class AgentRunState(Enum):
     INIT = "init"
     OBSERVING = "observing"
@@ -95,12 +135,14 @@ class AgentRunState(Enum):
     FAILED = "failed"
 
 
+# 验证层级：动作级/状态级/目标级
 class ValidationLevel(Enum):
     ACTION = "action"
     STATE = "state"
     GOAL = "goal"
 
 
+# 错误分类
 class ErrorCategory(Enum):
     ELEMENT_NOT_FOUND = "element_not_found"
     PAGE_NOT_EXPECTED = "page_not_expected"
@@ -111,6 +153,7 @@ class ErrorCategory(Enum):
     UNKNOWN = "unknown"
 
 
+# 错误严重程度
 class ErrorSeverity(Enum):
     LOW = "low"
     MEDIUM = "medium"
@@ -118,6 +161,7 @@ class ErrorSeverity(Enum):
     CRITICAL = "critical"
 
 
+# 恢复策略类型
 class RecoveryStrategy(Enum):
     RETRY = "retry"
     SKIP_STEP = "skip"
@@ -129,6 +173,7 @@ class RecoveryStrategy(Enum):
 
 
 @dataclass
+# UI 元素的矩形区域（x, y, width, height）
 class Rect:
     x: float = 0
     y: float = 0
@@ -141,7 +186,20 @@ class Rect:
 
 
 @dataclass
+# WDA 解析后的单个 UI 元素，包含类型、文本、位置、可交互性等属性
 class UIElement:
+    """
+    UI 元素定义。
+    
+    从 WDA XML 解析出的单个 UI 组件，包含类型、文本、位置、可交互性等属性。
+    semantic_text 属性用于生成人类可读的元素描述。
+    """
+    """
+    UI 元素定义。
+    
+    从 WDA XML 解析出的单个 UI 组件，包含类型、文本、位置、可交互性等属性。
+    semantic_text 属性用于生成人类可读的元素描述。
+    """
     id: str
     type: ElementType = ElementType.OTHER
     text: str = ""
@@ -199,7 +257,20 @@ class UIElement:
 
 
 @dataclass
+# 设备动态状态（连接、电量、前台应用等），每轮观察时更新
 class DeviceStatus:
+    """
+    设备状态。
+    
+    动态设备状态，如连接状态、电量、网络、前台应用等。
+    由 Device.check_status() 返回，每轮观察时更新。
+    """
+    """
+    设备状态。
+    
+    动态设备状态，如连接状态、电量、网络、前台应用等。
+    由 Device.check_status() 返回，每轮观察时更新。
+    """
     connection: ConnectionState = ConnectionState.UNKNOWN
     is_locked: bool = False
     foreground_app: str = ""
@@ -213,7 +284,20 @@ class DeviceStatus:
 
 
 @dataclass
+# 设备静态信息（平台、分辨率、系统版本等）
 class DeviceInfo:
+    """
+    设备信息。
+    
+    静态设备属性，如平台类型、屏幕分辨率、系统版本等。
+    由 Device.get_info() 返回。
+    """
+    """
+    设备信息。
+    
+    静态设备属性，如平台类型、屏幕分辨率、系统版本等。
+    由 Device.get_info() 返回。
+    """
     device_id: str = "unknown"
     platform: PlatformType = PlatformType.IOS
     model: str = "unknown"
@@ -224,6 +308,7 @@ class DeviceInfo:
 
 
 @dataclass
+# 设备截图和 UI 树的原始数据
 class ScreenCapture:
     screenshot_path: str = ""
     ui_tree: List[UIElement] = field(default_factory=list)
@@ -233,6 +318,7 @@ class ScreenCapture:
 
 
 @dataclass
+# 设备操作的执行结果（成功/失败、消息、耗时）
 class OperationResult:
     success: bool
     message: str = ""
@@ -241,7 +327,20 @@ class OperationResult:
 
 
 @dataclass
+# 两次观察之间的页面变化（新增/移除/修改的元素）
 class ObservationDiff:
+    """
+    页面观察结果。
+    
+    PerceptionLayer 的输出，包含当前页面名称、UI 元素列表、截图路径、
+    设备状态和可用动作。是 Planner 决策的主要输入。
+    """
+    """
+    页面观察结果。
+    
+    PerceptionLayer 的输出，包含当前页面名称、UI 元素列表、截图路径、
+    设备状态和可用动作。是 Planner 决策的主要输入。
+    """
     added: List[UIElement] = field(default_factory=list)
     removed: List[UIElement] = field(default_factory=list)
     changed: List[UIElement] = field(default_factory=list)
@@ -252,7 +351,20 @@ class ObservationDiff:
 
 
 @dataclass
+# PerceptionLayer 的输出，包含页面名称、UI 元素、截图、设备状态等
 class Observation:
+    """
+    页面观察结果。
+    
+    PerceptionLayer 的输出，包含当前页面名称、UI 元素列表、截图路径、
+    设备状态和可用动作。是 Planner 决策的主要输入。
+    """
+    """
+    页面观察结果。
+    
+    PerceptionLayer 的输出，包含当前页面名称、UI 元素列表、截图路径、
+    设备状态和可用动作。是 Planner 决策的主要输入。
+    """
     page_name: str = "unknown"
     elements: List[UIElement] = field(default_factory=list)
     screenshot_path: str = ""
@@ -286,6 +398,7 @@ class Observation:
 
 
 @dataclass
+# Planner 输出的抽象动作定义（类型、目标、值、元素 ID）
 class Action:
     type: ActionType
     target: str = ""
@@ -296,6 +409,7 @@ class Action:
 
 
 @dataclass
+# Planner 的完整决策输出，包含动作、理由、验证、进度更新等
 class NextDecision:
     type: DecisionType
     reason: str = ""
@@ -309,7 +423,20 @@ class NextDecision:
 
 
 @dataclass
+# Executor 执行动作后的完整记录
 class ActionRecord:
+    """
+    动作执行记录。
+    
+    Executor 执行动作后的完整记录，包含动作定义、执行结果、耗时和截图。
+    用于 Memory 存储、验证和状态报告。
+    """
+    """
+    动作执行记录。
+    
+    Executor 执行动作后的完整记录，包含动作定义、执行结果、耗时和截图。
+    用于 Memory 存储、验证和状态报告。
+    """
     action: Action
     device_method: str
     parameters: Dict[str, Any]
@@ -321,14 +448,40 @@ class ActionRecord:
 
 
 @dataclass
+# LLM 对"上一步动作"的验证结果
 class LLMValidation:
+    """
+    LLM 验证上下文。
+    
+    传递给 LLM 用于验证上一步动作的上下文信息，包含动作详情和当前观察。
+    由 AgentLoop 构建，Planner 使用。
+    """
+    """
+    LLM 验证上下文。
+    
+    传递给 LLM 用于验证上一步动作的上下文信息，包含动作详情和当前观察。
+    由 AgentLoop 构建，Planner 使用。
+    """
     """LLM 对"上一步动作"的验证结果"""
     passed: bool
     reason: str
     observation_summary: str = ""
 
 @dataclass
+# Validator 的验证输出（通过/失败、级别、消息、证据）
 class ValidationResult:
+    """
+    验证结果。
+    
+    Validator 对动作或目标的验证输出，包含是否通过、验证级别、原因和证据。
+    用于更新 TaskProgress 和决定是否需要恢复。
+    """
+    """
+    验证结果。
+    
+    Validator 对动作或目标的验证输出，包含是否通过、验证级别、原因和证据。
+    用于更新 TaskProgress 和决定是否需要恢复。
+    """
     passed: bool
     level: ValidationLevel = ValidationLevel.ACTION
     message: str = ""
@@ -337,6 +490,7 @@ class ValidationResult:
 
 
 @dataclass
+# 单轮执行的完整记录（决策、动作、验证、观察前后）
 class ProgressRecord:
     round_index: int
     focus: str
@@ -350,7 +504,20 @@ class ProgressRecord:
 
 
 @dataclass
+# 任务执行指标（起止时间、动作数、失败数、恢复数）
 class TaskMetrics:
+    """
+    任务定义。
+    
+    Agent 执行的最小工作单元，包含目标描述、成功标准、约束条件和执行参数。
+    通过 WorkflowEngine 转换为 Workflow 进行实际执行。
+    """
+    """
+    任务定义。
+    
+    Agent 执行的最小工作单元，包含目标描述、成功标准、约束条件和执行参数。
+    通过 WorkflowEngine 转换为 Workflow 进行实际执行。
+    """
     started_at: Optional[float] = None
     ended_at: Optional[float] = None
     action_count: int = 0
@@ -365,7 +532,32 @@ class TaskMetrics:
 
 
 @dataclass
+# 任务执行进度（已完成目标、当前焦点、动作计数、置信度）
 class TaskProgress:
+    """
+    任务执行进度跟踪。
+    
+    记录已完成的目标、当前轮次、累积动作数和置信度。
+    每轮执行后由 AgentLoop 更新，用于 Planner 决策和状态报告。
+    """
+    """
+    任务执行进度跟踪。
+    
+    记录已完成的目标、当前轮次、累积动作数和置信度。
+    每轮执行后由 AgentLoop 更新，用于 Planner 决策和状态报告。
+    """
+    """
+    任务定义。
+    
+    Agent 执行的最小工作单元，包含目标描述、成功标准、约束条件和执行参数。
+    通过 WorkflowEngine 转换为 Workflow 进行实际执行。
+    """
+    """
+    任务定义。
+    
+    Agent 执行的最小工作单元，包含目标描述、成功标准、约束条件和执行参数。
+    通过 WorkflowEngine 转换为 Workflow 进行实际执行。
+    """
     completed_objectives: List[str] = field(default_factory=list)
     pending_hints: List[str] = field(default_factory=list)
     current_focus: str = "初始化"
@@ -375,7 +567,32 @@ class TaskProgress:
 
 
 @dataclass
+# 任务目标定义（描述、成功标准、约束、最大动作数、超时）
 class TaskGoal:
+    """
+    任务目标定义。
+    
+    包含任务的描述性目标、可验证的成功标准、执行约束和参数配置。
+    success_criteria 用于 Validator 判断任务是否完成。
+    """
+    """
+    任务目标定义。
+    
+    包含任务的描述性目标、可验证的成功标准、执行约束和参数配置。
+    success_criteria 用于 Validator 判断任务是否完成。
+    """
+    """
+    任务定义。
+    
+    Agent 执行的最小工作单元，包含目标描述、成功标准、约束条件和执行参数。
+    通过 WorkflowEngine 转换为 Workflow 进行实际执行。
+    """
+    """
+    任务定义。
+    
+    Agent 执行的最小工作单元，包含目标描述、成功标准、约束条件和执行参数。
+    通过 WorkflowEngine 转换为 Workflow 进行实际执行。
+    """
     description: str
     success_criteria: List[str] = field(default_factory=list)
     constraints: List[str] = field(default_factory=list)
@@ -384,7 +601,20 @@ class TaskGoal:
 
 
 @dataclass
+# 任务实体，Agent 执行的最小工作单元
 class Task:
+    """
+    任务定义。
+    
+    Agent 执行的最小工作单元，包含目标描述、成功标准、约束条件和执行参数。
+    通过 WorkflowEngine 转换为 Workflow 进行实际执行。
+    """
+    """
+    任务定义。
+    
+    Agent 执行的最小工作单元，包含目标描述、成功标准、约束条件和执行参数。
+    通过 WorkflowEngine 转换为 Workflow 进行实际执行。
+    """
     goal: str
     params: Dict[str, Any] = field(default_factory=dict)
     id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
@@ -398,6 +628,7 @@ class Task:
 
 
 @dataclass
+# Planner 决策时的完整上下文（目标、进度、观察、设备、记忆、状态）
 class ExecutionContext:
     task_goal: TaskGoal
     progress: TaskProgress
@@ -409,7 +640,20 @@ class ExecutionContext:
 
 
 @dataclass
+# 结构化错误信息（分类、严重程度、消息、建议恢复策略）
 class ErrorInfo:
+    """
+    错误信息。
+    
+    结构化的错误描述，包含分类、严重程度、消息和上下文。
+    用于异常处理和恢复决策。
+    """
+    """
+    错误信息。
+    
+    结构化的错误描述，包含分类、严重程度、消息和上下文。
+    用于异常处理和恢复决策。
+    """
     category: ErrorCategory = ErrorCategory.UNKNOWN
     severity: ErrorSeverity = ErrorSeverity.LOW
     code: str = ""
@@ -420,7 +664,20 @@ class ErrorInfo:
 
 
 @dataclass
+# Agent 运行时状态快照，用于状态报告和调试
 class AgentState:
+    """
+    Agent 运行时状态。
+    
+    包含任务状态、进度、当前轮次、最后观察和决策、错误信息等。
+    用于状态报告和调试。
+    """
+    """
+    Agent 运行时状态。
+    
+    包含任务状态、进度、当前轮次、最后观察和决策、错误信息等。
+    用于状态报告和调试。
+    """
     task_id: str = ""
     task_status: TaskStatus = TaskStatus.CREATED
     task_goal: Optional[TaskGoal] = None
@@ -439,7 +696,20 @@ class AgentState:
 
 
 @dataclass
+# Agent 执行统计（成功率、轮次、恢复、截图数、LLM 耗时等）
 class AgentStats:
+    """
+    Agent 执行统计。
+    
+    记录动作成功率、验证通过率、恢复次数、总轮次等指标。
+    用于性能分析和优化。
+    """
+    """
+    Agent 执行统计。
+    
+    记录动作成功率、验证通过率、恢复次数、总轮次等指标。
+    用于性能分析和优化。
+    """
     total_actions: int = 0
     successful_actions: int = 0
     failed_actions: int = 0
@@ -461,7 +731,20 @@ class AgentStats:
 
 
 @dataclass
+# 传递给下一轮 LLM 的上一步动作上下文，用于验证
 class ActionContext:
+    """
+    动作上下文。
+    
+    用于 LLM 验证的简化动作信息，包含类型、目标、预期结果和实际结果。
+    在每轮开始时由 AgentLoop 构建。
+    """
+    """
+    动作上下文。
+    
+    用于 LLM 验证的简化动作信息，包含类型、目标、预期结果和实际结果。
+    在每轮开始时由 AgentLoop 构建。
+    """
     """上一步动作的上下文，用于 LLM 验证"""
     action_type: str
     action_target: str

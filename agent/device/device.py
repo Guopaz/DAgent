@@ -1,4 +1,14 @@
-"""自动从旧 agent.py 拆分生成；按职责维护。"""
+"""
+设备抽象基类（Device）。
+
+定义所有设备实现必须遵循的接口契约：
+- check_status(): 检查设备连接状态
+- capture_screen(): 截图并获取 UI 树
+- get_info(): 获取设备静态信息
+- click/swipe/input_text: 交互操作
+- press_back/press_home: 系统按键
+- wait(): 等待指定时间
+"""
 
 from __future__ import annotations
 
@@ -17,6 +27,7 @@ from xml.etree import ElementTree as ET
 
 from agent.models import *
 
+# Device: 设备抽象基类，定义所有设备实现必须遵循的接口契约
 class Device(ABC):
     @abstractmethod
     def check_status(self) -> DeviceStatus: ...

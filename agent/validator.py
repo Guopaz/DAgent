@@ -1,4 +1,11 @@
-"""自动从旧 agent.py 拆分生成；按职责维护。"""
+"""
+Agent 验证器（Validator）。
+
+核心职责：验证动作执行结果和任务完成状态。
+- validate(): 动作验证入口，优先使用 LLM 验证结果（decision.validation），回退到规则验证
+- validate_goal(): 任务完成验证，检查 success_criteria 是否全部满足
+- 规则验证作为安全网：检查页面变化、输入值可见等硬约束
+"""
 
 from __future__ import annotations
 
@@ -18,6 +25,8 @@ from xml.etree import ElementTree as ET
 from agent.models import *
 from agent.helpers import _is_navigation_back_goal, _loose_contains, _safe_asdict, _progress_genuinely_satisfies
 
+# Validator: 验证器，验证动作执行结果和任务完成状态
+# 优先使用 LLM 验证结果，回退到规则验证作为安全网
 class Validator:
     """验证器：主要依赖 LLM 验证结果，规则验证作为安全网。"""
 

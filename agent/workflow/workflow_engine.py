@@ -1,4 +1,10 @@
-"""自动从旧 agent.py 拆分生成；按职责维护。"""
+"""
+工作流引擎（WorkflowEngine）。
+
+核心职责：将 Task 转换为 Workflow。
+- create_workflow(): 从 Task 参数中提取配置，使用 infer_success_criteria 自动推断成功标准，
+  构建 TaskGoal 和 Workflow 对象
+"""
 
 from __future__ import annotations
 
@@ -19,6 +25,8 @@ from agent.models import *
 from agent.workflow.workflow import Workflow
 from agent.helpers import infer_success_criteria
 
+# WorkflowEngine: 工作流引擎，将 Task 转换为可执行的 Workflow
+# 自动推断成功标准，构建 TaskGoal 和 Workflow 对象
 class WorkflowEngine:
     def create_workflow(self, task: Task) -> Workflow:
         max_actions = int(task.params.get("max_actions", 30)) if task.params else 30

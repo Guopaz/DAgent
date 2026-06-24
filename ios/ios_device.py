@@ -1,4 +1,12 @@
-"""自动从旧 agent.py 拆分生成；按职责维护。"""
+"""
+iOS WebDriverAgent 设备实现（IOSWDADevice）。
+
+通过 WDA HTTP 接口控制真实 iOS 设备：
+- 截图：base64 解码后保存到任务截图目录
+- UI 树：调用 WDA source 接口获取 XML，通过 ui_parser 解析为 UIElement 列表
+- 交互：tap/drag/keyboard_input 等 WDA 原生接口
+- 返回按钮：优先查找名称匹配的返回按钮，回退到边缘拖拽手势
+"""
 
 from __future__ import annotations
 
@@ -16,10 +24,12 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 from xml.etree import ElementTree as ET
 
 from agent.models import *
-from agent.device.base import Device
+from agent.device.device import Device
 from agent.perception.ui_parser import parse_wda_xml
 from agent.helpers import _to_float
 
+# IOSWDADevice: 通过 WDA HTTP 接口控制真实 iOS 设备
+# 支持截图、UI 树获取、点击、滑动、输入、返回等操作
 class IOSWDADevice(Device):
     """iOS WebDriverAgent 的 Device 实现。"""
 

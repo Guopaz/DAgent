@@ -1,4 +1,11 @@
-"""自动从旧 agent.py 拆分生成；按职责维护。"""
+"""
+页面变化检测器（ChangeDetector）。
+
+核心职责：对比两次观察结果，检测页面变化。
+- detect_changes(): 通过元素 key（类型+文本+位置）对比，识别新增/移除/修改的元素
+- _detect_loading(): 检测页面是否处于加载状态（包含"loading""加载中"等关键词）
+- 输出 ObservationDiff，包含 page_changed、has_alert、has_keyboard、is_loading 等标志
+"""
 
 from __future__ import annotations
 
@@ -17,6 +24,8 @@ from xml.etree import ElementTree as ET
 
 from agent.models import *
 
+# ChangeDetector: 页面变化检测器，对比两次观察结果识别元素变化
+# 检测新增/移除/修改的元素，以及加载状态、弹窗、键盘
 class ChangeDetector:
     def __init__(self):
         self.previous: Optional[Observation] = None

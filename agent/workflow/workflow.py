@@ -1,4 +1,10 @@
-"""自动从旧 agent.py 拆分生成；按职责维护。"""
+"""
+工作流数据结构（Workflow）。
+
+将 Task 转换为可执行的工作流：
+- 持有 TaskGoal（含 success_criteria）和 TaskProgress
+- build_decision_context(): 构建 Planner 决策所需的 ExecutionContext
+"""
 
 from __future__ import annotations
 
@@ -18,6 +24,8 @@ from xml.etree import ElementTree as ET
 from agent.models import *
 from agent.memory import Memory
 
+# Workflow: 工作流数据结构，持有 TaskGoal 和 TaskProgress
+# build_decision_context() 构建 Planner 决策所需的 ExecutionContext
 @dataclass
 class Workflow:
     task_id: str
