@@ -1,16 +1,18 @@
-"""核心数据模型 — 所有模块共享的枚举、数据类和类型定义。"""
+"""自动从旧 agent.py 拆分生成；按职责维护。"""
 
 from __future__ import annotations
 
 import time
+import uuid
 from dataclasses import dataclass, field
+from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 
-# ============================================================
-# 任务状态
-# ============================================================
+if TYPE_CHECKING:
+    from agent.memory import Memory
+
 
 class TaskStatus(Enum):
     CREATED = "created"
@@ -18,250 +20,86 @@ class TaskStatus(Enum):
     PAUSED = "paused"
     COMPLETED = "completed"
     PARTIAL = "partial"
-    FAILED = "failed"
     ABORTED = "aborted"
+    FAILED = "failed"
     TIMED_OUT = "timed_out"
 
 
-# ============================================================
-# 元素类型
-# ============================================================
+class TaskPriority(Enum):
+    LOW = "low"
+    NORMAL = "normal"
+    HIGH = "high"
+    CRITICAL = "critical"
+
+
+class DecisionType(Enum):
+    ACTION = "action"
+    WAIT = "wait"
+    COMPLETE = "complete"
+    RECOVER = "recover"
+    ABORT = "abort"
+
+
+class ActionType(Enum):
+    CLICK = "click"
+    INPUT = "input"
+    SWIPE_UP = "swipe_up"
+    SWIPE_DOWN = "swipe_down"
+    LONG_PRESS = "long_press"
+    BACK = "back"
+    HOME = "home"
+    WAIT = "wait"
+
 
 class ElementType(Enum):
     BUTTON = "button"
     TEXT_FIELD = "text_field"
-    TEXT_VIEW = "text_view"
-    IMAGE = "image"
+    SECURE_TEXT_FIELD = "secure_text_field"
+    STATIC_TEXT = "static_text"
     CELL = "cell"
-    TABLE = "table"
-    COLLECTION_VIEW = "collection_view"
-    SCROLL_VIEW = "scroll_view"
-    NAVIGATION_BAR = "navigation_bar"
-    TAB_BAR = "tab_bar"
+    IMAGE = "image"
     SWITCH = "switch"
     SLIDER = "slider"
+    TABLE = "table"
+    NAVIGATION_BAR = "navigation_bar"
+    TAB_BAR = "tab_bar"
+    SEARCH_FIELD = "search_field"
     ALERT = "alert"
-    SHEET = "sheet"
     KEYBOARD = "keyboard"
     OTHER = "other"
 
-    @classmethod
-    def from_xcui(cls, xcui_type: str) -> ElementType:
-        """从 XCUIElementType 字符串映射到 ElementType。"""
-        mapping = {
-            "XCUIElementTypeButton": cls.BUTTON,
-            "XCUIElementTypeTextField": cls.TEXT_FIELD,
-            "XCUIElementTypeSearchField": cls.TEXT_FIELD,
-            "XCUIElementTypeSecureTextField": cls.TEXT_FIELD,
-            "XCUIElementTypeTextView": cls.TEXT_VIEW,
-            "XCUIElementTypeStaticText": cls.TEXT_VIEW,
-            "XCUIElementTypeImage": cls.IMAGE,
-            "XCUIElementTypeCell": cls.CELL,
-            "XCUIElementTypeTable": cls.TABLE,
-            "XCUIElementTypeCollectionView": cls.COLLECTION_VIEW,
-            "XCUIElementTypeScrollView": cls.SCROLL_VIEW,
-            "XCUIElementTypeNavigationBar": cls.NAVIGATION_BAR,
-            "XCUIElementTypeTabBar": cls.TAB_BAR,
-            "XCUIElementTypeSwitch": cls.SWITCH,
-            "XCUIElementTypeSlider": cls.SLIDER,
-            "XCUIElementTypeAlert": cls.ALERT,
-            "XCUIElementTypeSheet": cls.SHEET,
-            "XCUIElementTypeKeyboard": cls.KEYBOARD,
-        }
-        return mapping.get(xcui_type, cls.OTHER)
+
+class ConnectionState(Enum):
+    CONNECTED = "connected"
+    DISCONNECTED = "disconnected"
+    UNAUTHORIZED = "unauthorized"
+    UNKNOWN = "unknown"
 
 
-# ============================================================
-# 几何模型
-# ============================================================
-
-@dataclass
-class Rect:
-    x: float = 0.0
-    y: float = 0.0
-    width: float = 0.0
-    height: float = 0.0
-
-    @property
-    def center(self) -> tuple[float, float]:
-        return (self.x + self.width / 2, self.y + self.height / 2)
-
-    def to_dict(self) -> Dict[str, float]:
-        return {"x": self.x, "y": self.y, "width": self.width, "height": self.height}
+class PlatformType(Enum):
+    IOS = "ios"
+    ANDROID = "android"
+    SIMULATOR = "simulator"
+    OTHER = "other"
 
 
-# ============================================================
-# UI 元素
-# ============================================================
-
-@dataclass
-class UIElement:
-    id: str = ""
-    type: ElementType = ElementType.OTHER
-    text: str = ""
-    label: str = ""
-    value: str = ""
-    visible: bool = True
-    enabled: bool = True
-    clickable: bool = False
-    frame: Rect = field(default_factory=Rect)
-    attributes: Dict[str, str] = field(default_factory=dict)
-
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "id": self.id,
-            "type": self.type.value,
-            "text": self.text,
-            "label": self.label,
-            "value": self.value,
-            "visible": self.visible,
-            "enabled": self.enabled,
-            "clickable": self.clickable,
-            "frame": self.frame.to_dict(),
-            "attributes": self.attributes,
-        }
+class AgentRunState(Enum):
+    INIT = "init"
+    OBSERVING = "observing"
+    PLANNING = "planning"
+    EXECUTING = "executing"
+    VALIDATING = "validating"
+    PROGRESS_UPDATED = "progress_updated"
+    RECOVERING = "recovering"
+    TASK_COMPLETED = "task_completed"
+    FAILED = "failed"
 
 
-# ============================================================
-# 观察 (Observation)
-# ============================================================
+class ValidationLevel(Enum):
+    ACTION = "action"
+    STATE = "state"
+    GOAL = "goal"
 
-@dataclass
-class Observation:
-    elements: List[UIElement] = field(default_factory=list)
-    screenshot_base64: str = ""
-    page_name: str = ""
-    metadata: Dict[str, Any] = field(default_factory=dict)
-    timestamp: float = field(default_factory=time.time)
-
-    def to_summary(self) -> str:
-        """生成页面摘要文本。"""
-        lines = [f"页面: {self.page_name or '未知'}"]
-        lines.append(f"元素数: {len(self.elements)}")
-        interactive = [e for e in self.elements if e.clickable and e.visible]
-        if interactive:
-            lines.append(f"可交互元素 ({len(interactive)}):")
-            for e in interactive[:20]:
-                desc = e.label or e.text or e.id
-                lines.append(f"  - [{e.type.value}] {desc}")
-        return "\n".join(lines)
-
-
-# ============================================================
-# 观察差异 (ObservationDiff)
-# ============================================================
-
-@dataclass
-class ObservationDiff:
-    added: List[UIElement] = field(default_factory=list)
-    removed: List[UIElement] = field(default_factory=list)
-    changed: List[UIElement] = field(default_factory=list)
-    page_changed: bool = False
-    has_alert: bool = False
-    has_keyboard: bool = False
-    is_loading: bool = False
-    similarity: float = 1.0
-
-
-# ============================================================
-# 动作类型
-# ============================================================
-
-class ActionType(Enum):
-    CLICK = "CLICK"
-    INPUT = "INPUT"
-    SCROLL = "SCROLL"
-    SWIPE = "SWIPE"
-    WAIT = "WAIT"
-    BACK = "BACK"
-    HOME = "HOME"
-    LAUNCH_APP = "LAUNCH_APP"
-    DISMISS_ALERT = "DISMISS_ALERT"
-    DISMISS_KEYBOARD = "DISMISS_KEYBOARD"
-    LONG_PRESS = "LONG_PRESS"
-    NONE = "NONE"
-
-
-# ============================================================
-# 动作与动作记录
-# ============================================================
-
-@dataclass
-class Action:
-    action_type: ActionType = ActionType.NONE
-    target: str = ""
-    parameters: Dict[str, Any] = field(default_factory=dict)
-    reason: str = ""
-
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "action": self.action_type.value,
-            "target": self.target,
-            "parameters": self.parameters,
-            "reason": self.reason,
-        }
-
-
-@dataclass
-class ToolResponse:
-    success: bool = True
-    message: str = ""
-    data: Dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass
-class ActionRecord:
-    tool_name: str = ""
-    parameters: Dict[str, Any] = field(default_factory=dict)
-    result: Optional[ToolResponse] = None
-    screenshot_after: str = ""
-    timestamp: float = field(default_factory=time.time)
-    duration: float = 0.0
-
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "tool_name": self.tool_name,
-            "parameters": self.parameters,
-            "result": {"success": self.result.success, "message": self.result.message} if self.result else None,
-            "timestamp": self.timestamp,
-            "duration": self.duration,
-        }
-
-
-# ============================================================
-# 执行计划
-# ============================================================
-
-@dataclass
-class PlanStep:
-    index: int = 0
-    description: str = ""
-    status: str = "pending"  # pending / running / success / failed / skipped
-    actions: List[ActionRecord] = field(default_factory=list)
-    result_message: str = ""
-
-
-@dataclass
-class Plan:
-    steps: List[PlanStep] = field(default_factory=list)
-    raw_text: str = ""
-
-
-# ============================================================
-# 步骤结果
-# ============================================================
-
-@dataclass
-class StepResult:
-    step_index: int = 0
-    success: bool = False
-    message: str = ""
-    actions_count: int = 0
-
-
-# ============================================================
-# 错误与恢复模型
-# ============================================================
 
 class ErrorCategory(Enum):
     ELEMENT_NOT_FOUND = "element_not_found"
@@ -280,6 +118,287 @@ class ErrorSeverity(Enum):
     CRITICAL = "critical"
 
 
+class RecoveryStrategy(Enum):
+    RETRY = "retry"
+    SKIP_STEP = "skip"
+    REPLAN = "re_decide"
+    FALLBACK = "fallback"
+    ABORT_TASK = "abort"
+    RESTART_APP = "restart_app"
+    GO_HOME = "go_home"
+
+
+@dataclass
+class Rect:
+    x: float = 0
+    y: float = 0
+    width: float = 0
+    height: float = 0
+
+    @property
+    def center(self) -> Tuple[float, float]:
+        return self.x + self.width / 2, self.y + self.height / 2
+
+
+@dataclass
+class UIElement:
+    id: str
+    type: ElementType = ElementType.OTHER
+    text: str = ""
+    label: str = ""
+    value: str = ""
+    visible: bool = True
+    enabled: bool = True
+    clickable: bool = False
+    frame: Rect = field(default_factory=Rect)
+    attributes: Dict[str, str] = field(default_factory=dict)
+
+    @property
+    def semantic_text(self) -> str:
+        # WDA/Accessibility 中 text、label、value、name 经常重复，
+        # 例如 name=Send label=发送 text=Send 会显示成 “Send 发送 Send”。
+        # 这里仅做字段级去重，保留顺序，避免日志和 target 里出现重复元素名。
+        parts: list[str] = []
+        seen: set[str] = set()
+        for raw in [self.text, self.label, self.value, self.attributes.get("name", "")]:
+            value = str(raw or "").strip()
+            if not value or value in seen:
+                continue
+            seen.add(value)
+            parts.append(value)
+        return " ".join(parts).strip()
+
+    @property
+    def name(self) -> str:
+        return self.attributes.get("name", "")
+
+    @property
+    def center(self) -> Tuple[float, float]:
+        return self.frame.center
+
+    @property
+    def bounds(self) -> Dict[str, float]:
+        return {"x": self.frame.x, "y": self.frame.y, "width": self.frame.width, "height": self.frame.height}
+
+    def detail_dict(self) -> Dict[str, Any]:
+        cx, cy = self.center
+        return {
+            "id": self.id,
+            "type": self.type.value,
+            "name": self.name,
+            "text": self.text,
+            "label": self.label,
+            "value": self.value,
+            "visible": self.visible,
+            "enabled": self.enabled,
+            "clickable": self.clickable,
+            "center": {"x": cx, "y": cy},
+            "bounds": self.bounds,
+            "attributes": self.attributes,
+        }
+
+
+@dataclass
+class DeviceStatus:
+    connection: ConnectionState = ConnectionState.UNKNOWN
+    is_locked: bool = False
+    foreground_app: str = ""
+    target_app_foreground: bool = True
+    screen_on: bool = True
+    network_reachable: bool = True
+    battery_level: float = -1.0
+    orientation: str = "portrait"
+    healthy: bool = True
+    message: str = ""
+
+
+@dataclass
+class DeviceInfo:
+    device_id: str = "unknown"
+    platform: PlatformType = PlatformType.IOS
+    model: str = "unknown"
+    os_version: str = "unknown"
+    screen_resolution: Tuple[int, int] = (0, 0)
+    pixel_ratio: float = 1.0
+    capabilities: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class ScreenCapture:
+    screenshot_path: str = ""
+    ui_tree: List[UIElement] = field(default_factory=list)
+    raw_ui_tree: Any = None
+    timestamp: float = field(default_factory=time.time)
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class OperationResult:
+    success: bool
+    message: str = ""
+    raw_response: Any = None
+    duration: float = 0.0
+
+
+@dataclass
+class ObservationDiff:
+    added: List[UIElement] = field(default_factory=list)
+    removed: List[UIElement] = field(default_factory=list)
+    changed: List[UIElement] = field(default_factory=list)
+    page_changed: bool = False
+    is_loading: bool = False
+    has_alert: bool = False
+    has_keyboard: bool = False
+
+
+@dataclass
+class Observation:
+    page_name: str = "unknown"
+    elements: List[UIElement] = field(default_factory=list)
+    screenshot_path: str = ""
+    raw_ui_tree: Any = None
+    device_status: DeviceStatus = field(default_factory=DeviceStatus)
+    device_info: DeviceInfo = field(default_factory=DeviceInfo)
+    page_metadata: Dict[str, Any] = field(default_factory=dict)
+    available_actions: List[str] = field(default_factory=list)
+    diff_from_previous: ObservationDiff = field(default_factory=ObservationDiff)
+
+    def text_snapshot(self, max_items: Optional[int] = None, visible_only: bool = True) -> str:
+        lines: list[str] = []
+        source = [e for e in self.elements if (e.visible or not visible_only)]
+        if max_items is not None:
+            source = source[:max_items]
+        for i, el in enumerate(source, 1):
+            text = el.semantic_text
+            if not text and el.type == ElementType.OTHER:
+                continue
+            cx, cy = el.center
+            bounds = f"x={el.frame.x:.0f},y={el.frame.y:.0f},w={el.frame.width:.0f},h={el.frame.height:.0f}"
+            lines.append(
+                f"{i}. type={el.type.value} name='{el.name}' label='{el.label}' "
+                f"text='{el.text}' value='{el.value}' visible={el.visible} enabled={el.enabled} "
+                f"clickable={el.clickable} center=({cx:.0f},{cy:.0f}) bounds=({bounds})"
+            )
+        return "\n".join(lines) or "当前 UI 树未提供有效可见元素"
+
+    def visible_element_details(self) -> List[Dict[str, Any]]:
+        return [e.detail_dict() for e in self.elements if e.visible]
+
+
+@dataclass
+class Action:
+    type: ActionType
+    target: str = ""
+    value: str = ""
+    # 执行阶段使用的确定性 UI 元素引用，来自当前 Observation.elements[].id。
+    # target 仅作为人类可读日志/兼容旧决策，不再作为主要模糊定位依据。
+    element_id: str = ""
+
+
+@dataclass
+class NextDecision:
+    type: DecisionType
+    reason: str = ""
+    action: Optional[Action] = None
+    expected_outcome: str = ""
+    progress_update: List[str] = field(default_factory=list)
+    validation_hint: str = ""
+    # LLM 在决策前对当前页面内容/状态的简短总结，用于日志展示。
+    page_summary: str = ""
+
+
+@dataclass
+class ActionRecord:
+    action: Action
+    device_method: str
+    parameters: Dict[str, Any]
+    result: OperationResult
+    screenshot_after: str = ""
+    timestamp: float = field(default_factory=time.time)
+    duration: float = 0.0
+
+
+@dataclass
+class ValidationResult:
+    passed: bool
+    level: ValidationLevel = ValidationLevel.ACTION
+    message: str = ""
+    evidence: Dict[str, Any] = field(default_factory=dict)
+    timestamp: float = field(default_factory=time.time)
+
+
+@dataclass
+class ProgressRecord:
+    round_index: int
+    focus: str
+    decision: NextDecision
+    action_record: Optional[ActionRecord]
+    validation: ValidationResult
+    observation_before: Observation
+    observation_after: Observation
+    duration: float
+    error: str = ""
+
+
+@dataclass
+class TaskMetrics:
+    started_at: Optional[float] = None
+    ended_at: Optional[float] = None
+    action_count: int = 0
+    failure_count: int = 0
+    recovery_count: int = 0
+
+    @property
+    def duration(self) -> float:
+        if not self.started_at:
+            return 0.0
+        return (self.ended_at or time.time()) - self.started_at
+
+
+@dataclass
+class TaskProgress:
+    completed_objectives: List[str] = field(default_factory=list)
+    pending_hints: List[str] = field(default_factory=list)
+    current_focus: str = "初始化"
+    action_count: int = 0
+    last_decision: Optional[NextDecision] = None
+    confidence: float = 0.0
+
+
+@dataclass
+class TaskGoal:
+    description: str
+    success_criteria: List[str] = field(default_factory=list)
+    constraints: List[str] = field(default_factory=list)
+    max_actions: int = 30
+    timeout: float = 600.0
+
+
+@dataclass
+class Task:
+    goal: str
+    params: Dict[str, Any] = field(default_factory=dict)
+    id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
+    status: TaskStatus = TaskStatus.CREATED
+    priority: TaskPriority = TaskPriority.NORMAL
+    created_at: datetime = field(default_factory=datetime.now)
+    updated_at: datetime = field(default_factory=datetime.now)
+    progress: TaskProgress = field(default_factory=TaskProgress)
+    results: List[ProgressRecord] = field(default_factory=list)
+    metrics: TaskMetrics = field(default_factory=TaskMetrics)
+
+
+@dataclass
+class ExecutionContext:
+    task_goal: TaskGoal
+    progress: TaskProgress
+    observation: Observation
+    device_status: DeviceStatus
+    device_info: DeviceInfo
+    memory: Memory
+    state: AgentRunState
+
+
 @dataclass
 class ErrorInfo:
     category: ErrorCategory = ErrorCategory.UNKNOWN
@@ -288,98 +407,25 @@ class ErrorInfo:
     message: str = ""
     context: str = ""
     timestamp: float = field(default_factory=time.time)
-    suggested_strategy: RecoveryStrategy = None  # forward ref, set after
+    suggested_strategy: RecoveryStrategy = RecoveryStrategy.REPLAN
 
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "category": self.category.value,
-            "severity": self.severity.value,
-            "code": self.code,
-            "message": self.message,
-            "context": self.context,
-            "timestamp": self.timestamp,
-            "suggested_strategy": self.suggested_strategy.value if self.suggested_strategy else None,
-        }
-
-
-class RecoveryStrategy(Enum):
-    RETRY = "retry"
-    SKIP_STEP = "skip"
-    REPLAN = "replan"
-    FALLBACK = "fallback"
-    ABORT_TASK = "abort"
-    RESTART_APP = "restart_app"
-    GO_HOME = "go_home"
-
-
-# 修复前向引用
-ErrorInfo.__dataclass_fields__["suggested_strategy"].default = None
-
-
-# ============================================================
-# 工作流状态
-# ============================================================
-
-class WorkflowStatus(Enum):
-    CREATED = "created"
-    RUNNING = "running"
-    COMPLETED = "completed"
-    FAILED = "failed"
-
-
-# ============================================================
-# Agent 状态机阶段
-# ============================================================
-
-class AgentPhase(Enum):
-    INIT = "init"
-    OBSERVING = "observing"
-    PLANNING = "planning"
-    EXECUTING = "executing"
-    VALIDATING = "validating"
-    RECOVERING = "recovering"
-    STEP_COMPLETED = "step_completed"
-    TASK_COMPLETED = "task_completed"
-
-
-# ============================================================
-# 前置检查结果
-# ============================================================
-
-class PreCheckResult(Enum):
-    NORMAL = "normal"
-    HANDLED = "handled"
-    WAIT = "wait"
-    ABORT = "abort"
-
-
-# ============================================================
-# 验证结果
-# ============================================================
-
-@dataclass
-class ValidationResult:
-    passed: bool = False
-    confidence: float = 0.0
-    reason: str = ""
-    details: Dict[str, Any] = field(default_factory=dict)
-
-
-# ============================================================
-# Agent 运行状态
-# ============================================================
 
 @dataclass
 class AgentState:
     task_id: str = ""
     task_status: TaskStatus = TaskStatus.CREATED
-    current_step_index: int = 0
-    plan: Optional[Plan] = None
+    task_goal: Optional[TaskGoal] = None
+    progress: TaskProgress = field(default_factory=TaskProgress)
+    current_round: int = 0
+    current_node: str = "init"
     last_observation: Optional[Observation] = None
+    device_status: DeviceStatus = field(default_factory=DeviceStatus)
+    device_info: DeviceInfo = field(default_factory=DeviceInfo)
+    last_decision: Optional[NextDecision] = None
     last_error: Optional[ErrorInfo] = None
     total_recoveries: int = 0
     consecutive_recoveries: int = 0
-    started_at: float = field(default_factory=time.time)
+    started_at: float = 0.0
     last_active_at: float = field(default_factory=time.time)
 
 
@@ -388,52 +434,18 @@ class AgentStats:
     total_actions: int = 0
     successful_actions: int = 0
     failed_actions: int = 0
-    completed_steps: int = 0
-    skipped_steps: int = 0
-    failed_steps: int = 0
+    completed_objectives: int = 0
+    decision_rounds: int = 0
+    failed_rounds: int = 0
     recovery_attempts: int = 0
-    recovery_successes: int = 0
+    recovery_success_rate: float = 1.0
     screenshot_count: int = 0
     llm_call_duration: float = 0.0
     llm_token_usage: int = 0
-    wda_call_duration: float = 0.0
+    device_call_duration: float = 0.0
 
     @property
-    def success_rate(self) -> float:
-        if self.total_actions == 0:
-            return 1.0
-        return self.successful_actions / self.total_actions
-
-    @property
-    def recovery_success_rate(self) -> float:
-        if self.recovery_attempts == 0:
-            return 1.0
-        return self.recovery_successes / self.recovery_attempts
+    def action_success_rate(self) -> float:
+        return self.successful_actions / self.total_actions if self.total_actions else 1.0
 
 
-# ============================================================
-# 任务快照
-# ============================================================
-
-@dataclass
-class TaskSnapshot:
-    task_id: str = ""
-    status: TaskStatus = TaskStatus.CREATED
-    current_step_index: int = 0
-    plan: Optional[Plan] = None
-    results: List[StepResult] = field(default_factory=list)
-    contexts: Dict[str, Any] = field(default_factory=dict)
-    timestamp: float = field(default_factory=time.time)
-
-
-# ============================================================
-# 健康检查项
-# ============================================================
-
-@dataclass
-class HealthCheck:
-    name: str = ""
-    healthy: bool = True
-    message: str = ""
-    value: Any = None
-    threshold: Any = None
