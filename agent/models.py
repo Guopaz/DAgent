@@ -696,6 +696,7 @@ class AgentState:
     last_error: Optional[ErrorInfo] = None
     total_recoveries: int = 0
     consecutive_recoveries: int = 0
+    consecutive_complete_failures: int = 0
     started_at: float = 0.0
     last_active_at: float = field(default_factory=time.time)
 

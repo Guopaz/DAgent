@@ -123,6 +123,22 @@ class Validator:
                     {"matched": progress_matched, "source": "progress+validated_actions", "last_action": successful_actions[-1]},
                 )
 
+        # 多步骤任务检测：如果最近有成功动作且页面发生变化，说明任务正在执行，不应直接失败
+        if memory and memory.action_history:
+            recent_actions = memory.recent_actions(3)
+            recent_successful = [a for a in recent_actions if a.get("success") and a.get("validation_passed")]
+            # 如果最近有成功动作，说明任务正在执行中，返回失败但提示继续执行
+            if recent_successful and not recent_actions[-1].get("action", "").startswith("swipe"):
+                page_changed = len(memory.page_history) >= 2 and memory.page_history[-1] != memory.page_history[-2]
+                if page_changed:
+                    return ValidationResult(
+                        False,
+                        ValidationLevel.GOAL,
+                        "任务正在执行中，检测到成功动作和页面变化，继续执行",
+                        {"matched": matched, "criteria": criteria, "hint": "continue_execution",
+                         "last_successful_action": recent_successful[-1], "page_changed": True},
+                    )
+
         return ValidationResult(False, ValidationLevel.GOAL, "未能确认所有成功标准", {"matched": matched, "criteria": criteria})
 
     @staticmethod

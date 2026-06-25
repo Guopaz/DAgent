@@ -341,6 +341,22 @@ class Planner:
     @classmethod
     def _is_premature_complete(cls, context: ExecutionContext) -> bool:
         goal = context.task_goal.description
+        
+        # 多步骤任务：包含逗号分隔的多个子任务
+        if ',' in goal or '，' in goal:
+            subtasks = [s.strip() for s in goal.replace(',', '，').split('，') if s.strip()]
+            # 如果子任务数量 > 1，检查是否所有子任务都已完成
+            if len(subtasks) > 1:
+                # 每个子任务需要有对应的 completed_objective
+                if len(context.progress.completed_objectives) < len(subtasks):
+                    return True
+                # 检查每个子任务是否在进度中有对应完成记录
+                for subtask in subtasks:
+                    if not any(subtask in obj or _loose_contains(obj, subtask) 
+                              for obj in context.progress.completed_objectives):
+                        return True
+                return False
+        
         if not cls._is_action_required_goal(goal):
             return False
         return context.progress.action_count == 0 and not context.progress.completed_objectives
@@ -365,6 +381,18 @@ class Planner:
 
         history = " ".join(context.progress.completed_objectives)
         evidence = page_text + " " + history
+        
+        # 多步骤任务：包含逗号分隔的多个子任务
+        if ',' in goal or '，' in goal:
+            subtasks = [s.strip() for s in goal.replace(',', '，').split('，') if s.strip()]
+            if len(subtasks) > 1:
+                # 检查每个子任务是否都有证据（页面文本或进度）
+                for subtask in subtasks:
+                    subtask_evidence = page_text if not any(m in subtask for m in ["切换", "返回", "上一页"]) else history
+                    if not _loose_contains(subtask_evidence, subtask):
+                        return False
+                return True
+        
         # 保守判断：只有出现明显完成词，或全部成功标准关键词都有证据，才完成。
         done_words = ["完成", "成功", "已投递", "已发送", "提交成功", "保存成功"]
         if any(w in evidence for w in done_words) and any(w in goal for w in ["投递", "发送", "提交", "保存", "完成"]):

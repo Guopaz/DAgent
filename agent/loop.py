@@ -173,6 +173,15 @@ class AgentLoop:
 
                 action_record: Optional[ActionRecord] = None
                 if decision.type == DecisionType.COMPLETE:
+                    # 检测连续 COMPLETE 循环：如果连续 2 次 Planner 都 declare complete 但 Validator 拒绝，强制 abort
+                    if self.agent_state.consecutive_complete_failures >= 2:
+                        task.status = TaskStatus.FAILED
+                        self.agent_state.task_status = task.status
+                        self.agent_state.current_node = "complete_loop_abort"
+                        self._save_state_report(task, workflow, last_observation=observation_before)
+                        print(f"🛑 连续 {self.agent_state.consecutive_complete_failures} 次 COMPLETE 验证失败，强制终止")
+                        break
+                    
                     self.state_machine.transition(AgentRunState.VALIDATING)
                     validation = self.validator.validate(
                         decision,
@@ -194,6 +203,8 @@ class AgentLoop:
                         self._save_state_report(task, workflow, last_observation=observation_before)
                         print("✅ 任务完成")
                         break
+                    # 记录连续失败次数
+                    self.agent_state.consecutive_complete_failures += 1
                     decision = NextDecision(DecisionType.RECOVER, reason="Planner 判断完成，但 Validator 未确认")
 
                 if decision.type == DecisionType.ABORT:
@@ -233,6 +244,8 @@ class AgentLoop:
 
                 self.state_machine.transition(AgentRunState.EXECUTING)
                 action_record = self.executor.execute(action, observation_before)
+                # 执行动作后重置连续 COMPLETE 失败计数
+                self.agent_state.consecutive_complete_failures = 0
                 task.progress.action_count += 1
                 task.metrics.action_count += 1
                 self.agent_state.current_node = "executing"
