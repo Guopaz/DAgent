@@ -68,8 +68,12 @@ class PerceptionLayer:
             actions.append("click")
         if any(e.type in {ElementType.TEXT_FIELD, ElementType.SEARCH_FIELD, ElementType.SECURE_TEXT_FIELD} for e in elements):
             actions.append("input")
-        if any(e.type in {ElementType.TABLE, ElementType.CELL} for e in elements):
-            actions.extend(["swipe_up", "swipe_down"])
+        # 滑动方向始终可用（页面可垂直或水平滚动）
+        actions.extend(["swipe_up", "swipe_down", "swipe_left", "swipe_right", "drag"])
+        # 滚动和捏合始终可用
+        actions.extend(["scroll", "pinch"])
+        # 长按始终可用
+        actions.append("long_press")
         actions.extend(["back", "home", "wait"])
         return sorted(set(actions))
 

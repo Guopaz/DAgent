@@ -46,8 +46,20 @@ class MockDevice(Device):
     def click(self, x: float, y: float) -> OperationResult:
         return OperationResult(True, f"mock click {x},{y}")
 
-    def swipe(self, start_x: float, start_y: float, end_x: float, end_y: float, duration: float = 0.2) -> OperationResult:
-        return OperationResult(True, "mock swipe")
+    def drag(self, start_x: float, start_y: float, end_x: float, end_y: float, duration: float = 0.2) -> OperationResult:
+        return OperationResult(True, "mock drag")
+
+    def swipe_direction(self, direction: str, velocity: float = 1000) -> OperationResult:
+        return OperationResult(True, f"mock swipe {direction}")
+
+    def pinch(self, scale: float, velocity: float = 1.0) -> OperationResult:
+        return OperationResult(True, f"mock pinch {scale}")
+
+    def scroll(self, direction: str = 'down', distance: float = 1.0) -> OperationResult:
+        return OperationResult(True, f"mock scroll {direction}")
+
+    def long_press(self, x: float, y: float, duration: float = 2.0) -> OperationResult:
+        return OperationResult(True, f"mock long_press {x},{y}")
 
     def input_text(self, text: str) -> OperationResult:
         return OperationResult(True, f"mock input {text}")

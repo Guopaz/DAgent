@@ -5,7 +5,7 @@
 - check_status(): 检查设备连接状态
 - capture_screen(): 截图并获取 UI 树
 - get_info(): 获取设备静态信息
-- click/swipe/input_text: 交互操作
+- click/drag/input_text: 交互操作
 - press_back/press_home: 系统按键
 - wait(): 等待指定时间
 """
@@ -42,7 +42,19 @@ class Device(ABC):
     def click(self, x: float, y: float) -> OperationResult: ...
 
     @abstractmethod
-    def swipe(self, start_x: float, start_y: float, end_x: float, end_y: float, duration: float = 0.2) -> OperationResult: ...
+    def drag(self, start_x: float, start_y: float, end_x: float, end_y: float, duration: float = 0.2) -> OperationResult: ...
+
+    @abstractmethod
+    def swipe_direction(self, direction: str, velocity: float = 1000) -> OperationResult: ...
+
+    @abstractmethod
+    def pinch(self, scale: float, velocity: float = 1.0) -> OperationResult: ...
+
+    @abstractmethod
+    def scroll(self, direction: str = 'down', distance: float = 1.0) -> OperationResult: ...
+
+    @abstractmethod
+    def long_press(self, x: float, y: float, duration: float = 2.0) -> OperationResult: ...
 
     @abstractmethod
     def input_text(self, text: str) -> OperationResult: ...

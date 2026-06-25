@@ -141,17 +141,22 @@ def infer_success_criteria(goal: str) -> List[str]:
 
 
 # 根据设备屏幕分辨率计算默认滑动参数（起止坐标、持续时间）
-def _default_swipe_params(info: DeviceInfo, up: bool = True) -> Dict[str, float]:
+# direction: 'up' / 'down' / 'left' / 'right'
+def _default_swipe_params(info: DeviceInfo, direction: str = 'up') -> Dict[str, float]:
     w, h = info.screen_resolution
     w = w or 390
     h = h or 844
-    return {
-        "start_x": w * 0.5,
-        "start_y": h * (0.75 if up else 0.30),
-        "end_x": w * 0.5,
-        "end_y": h * (0.30 if up else 0.75),
-        "duration": 0.4,
-    }
+    cx, cy = w * 0.5, h * 0.5
+    if direction == 'up':
+        return {"start_x": cx, "start_y": h * 0.75, "end_x": cx, "end_y": h * 0.30, "duration": 0.4}
+    elif direction == 'down':
+        return {"start_x": cx, "start_y": h * 0.30, "end_x": cx, "end_y": h * 0.75, "duration": 0.4}
+    elif direction == 'left':
+        return {"start_x": w * 0.80, "start_y": cy, "end_x": w * 0.20, "end_y": cy, "duration": 0.4}
+    elif direction == 'right':
+        return {"start_x": w * 0.20, "start_y": cy, "end_x": w * 0.80, "end_y": cy, "duration": 0.4}
+    else:
+        raise ValueError(f"不支持的滑动方向: {direction}")
 
 
 # 判断是否为导航返回类任务（包含"返回上一页"等关键词）

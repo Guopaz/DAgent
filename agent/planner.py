@@ -69,7 +69,7 @@ class Planner:
             return None
         # 检查最近 3 次是否都是相同类型的操作
         action_types = [a.get("action") for a in recent[-3:]]
-        if len(set(action_types)) == 1 and action_types[0] in ["swipe_up", "swipe_down"]:
+        if len(set(action_types)) == 1 and action_types[0] in ["swipe_up", "swipe_down", "swipe_left", "swipe_right"]:
             # 连续 3 次滑动，检查是否有进度推进
             progress_count = len(context.progress.completed_objectives)
             if progress_count < len(action_types):
@@ -289,7 +289,7 @@ class Planner:
             )
         
         # 对于点击操作，检查页面是否发生变化
-        if last_action_context.action_type in ["click", "swipe_up", "swipe_down"]:
+        if last_action_context.action_type in ["click", "swipe_up", "swipe_down", "swipe_left", "swipe_right", "scroll", "pinch"]:
             # 如果页面名称变化或元素数量变化，认为成功
             if observation.page_name != last_action_context.page_before:
                 return LLMValidation(

@@ -22,6 +22,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 from xml.etree import ElementTree as ET
+from ios.wda_client import WDAClient
 
 from agent.models import *
 from agent.device.device import Device
@@ -33,7 +34,7 @@ from agent.helpers import _to_float
 class IOSWDADevice(Device):
     """iOS WebDriverAgent 的 Device 实现。"""
 
-    def __init__(self, wda_client: Any, artifact_dir: str | Path = ".artifacts"):
+    def __init__(self, wda_client: WDAClient, artifact_dir: str | Path = ".artifacts"):
         self.client = wda_client
         self.set_artifact_dir(artifact_dir)
 
@@ -111,16 +112,27 @@ class IOSWDADevice(Device):
     def click(self, x: float, y: float) -> OperationResult:
         return self._op("tap", lambda: self.client.tap(int(x), int(y)), {"x": x, "y": y})
 
-    def swipe(self, start_x: float, start_y: float, end_x: float, end_y: float, duration: float = 0.2) -> OperationResult:
+    def drag(self, start_x: float, start_y: float, end_x: float, end_y: float, duration: float = 0.2) -> OperationResult:
         def call():
-            # WDA 的 swipe 是方向式；优先使用 drag 保留坐标语义。
             if hasattr(self.client, "drag"):
                 return self.client.drag(int(start_x), int(start_y), int(end_x), int(end_y), duration)
             dx, dy = end_x - start_x, end_y - start_y
             direction = "left" if abs(dx) > abs(dy) and dx < 0 else "right" if abs(dx) > abs(dy) else "up" if dy < 0 else "down"
             return self.client.swipe(direction=direction, velocity=1000, x=int(start_x), y=int(start_y))
 
-        return self._op("swipe", call, {"start_x": start_x, "start_y": start_y, "end_x": end_x, "end_y": end_y})
+        return self._op("drag", call, {"start_x": start_x, "start_y": start_y, "end_x": end_x, "end_y": end_y})
+
+    def swipe_direction(self, direction: str, velocity: float = 1000) -> OperationResult:
+        return self._op("swipe_direction", lambda: self.client.swipe(direction, velocity=velocity), {"direction": direction, "velocity": velocity})
+
+    def pinch(self, scale: float, velocity: float = 1.0) -> OperationResult:
+        return self._op("pinch", lambda: self.client.pinch(scale, velocity=velocity), {"scale": scale, "velocity": velocity})
+
+    def scroll(self, direction: str = 'down', distance: float = 1.0) -> OperationResult:
+        return self._op("scroll", lambda: self.client.scroll(direction, distance=distance), {"direction": direction, "distance": distance})
+
+    def long_press(self, x: float, y: float, duration: float = 2.0) -> OperationResult:
+        return self._op("long_press", lambda: self.client.touch_and_hold(int(x), int(y), duration=duration), {"x": x, "y": y, "duration": duration})
 
     def input_text(self, text: str) -> OperationResult:
         def call():
